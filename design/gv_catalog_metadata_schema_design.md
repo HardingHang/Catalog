@@ -1,8 +1,8 @@
-# GaussVector Iceberg Catalog 元信息表设计
+# openGauss Iceberg Catalog 元信息表设计
 
 ## 1. 文档目标
 
-本文档定义 GaussVector 首期 Iceberg Catalog 元信息表设计，重点说明以下内容：
+本文档定义 openGauss 首期 Iceberg Catalog 元信息表设计，重点说明以下内容：
 
 1. Iceberg 原生元信息范围及结构。
 2. 首期缓存边界与不缓存内容。
@@ -309,30 +309,7 @@ CREATE TABLE iceberg_catalog.tables (
 | `current_snapshot_id` | 当前 Snapshot 指针 | `metadata.json.current-snapshot-id` | 直接对应 |
 | `default_spec_id` | 当前 Spec 指针 | `metadata.json.default-spec-id` | 直接对应 |
 
-`tables` 对应的是一张 Iceberg 表的顶层 `metadata.json` 摘要，以及 Catalog 层的表标识信息。完整 `metadata.json` 顶层通常包含：
-
-- `format-version`
-- `table-uuid`
-- `location`
-- `last-sequence-number`
-- `last-updated-ms`
-- `last-column-id`
-- `schemas`
-- `current-schema-id`
-- `partition-specs`
-- `default-spec-id`
-- `last-partition-id`
-- `sort-orders`
-- `default-sort-order-id`
-- `properties`
-- `current-snapshot-id`
-- `snapshots`
-- `snapshot-log`
-- `metadata-log`
-- `refs`
-- `statistics`
-- `partition-statistics`
-- `next-row-id`
+`tables` 对应的是一张 Iceberg 表的顶层 `metadata.json` 摘要，以及 Catalog 层的表标识信息。完整 `metadata.json` 顶层通常包含：`format-version`、`table-uuid`、`location`、`last-sequence-number`、`last-updated-ms`、`last-column-id`、`schemas`、`current-schema-id`、`partition-specs`、`default-spec-id`、`last-partition-id`、`sort-orders`、`default-sort-order-id`、`properties`、`current-snapshot-id`、`snapshots`、`snapshot-log`、`metadata-log`、`refs`、`statistics`、`partition-statistics`、`next-row-id`。
 
 #### 缓存范围说明
 
@@ -390,30 +367,30 @@ CREATE TABLE iceberg_catalog.tables (
 CREATE TABLE iceberg_catalog.table_schemas (
     table_uuid          UUID NOT NULL,
     schema_id           INT NOT NULL,
-    attribute_position  INT NOT NULL,
-    attribute_id        INT,
-    attribute_name      TEXT,
-    attribute_required  BOOLEAN,
-    attribute_type      TEXT,
-    attribute_doc       TEXT,
-    PRIMARY KEY (table_uuid, schema_id, attribute_position),
-    UNIQUE (table_uuid, schema_id, attribute_id),
+    field_position      INT NOT NULL,
+    field_id            INT,
+    field_name          TEXT,
+    field_required      BOOLEAN,
+    field_type          TEXT,
+    field_doc           TEXT,
+    PRIMARY KEY (table_uuid, schema_id, field_position),
+    UNIQUE (table_uuid, schema_id, field_id),
     FOREIGN KEY (table_uuid)
         REFERENCES iceberg_catalog.tables(table_uuid)
         ON DELETE CASCADE,
     CHECK (
-        (attribute_position = -1
-            AND attribute_id IS NULL
-            AND attribute_name IS NULL
-            AND attribute_required IS NULL
-            AND attribute_type IS NULL
-            AND attribute_doc IS NULL)
+        (field_position = -1
+            AND field_id IS NULL
+            AND field_name IS NULL
+            AND field_required IS NULL
+            AND field_type IS NULL
+            AND field_doc IS NULL)
         OR
-        (attribute_position >= 0
-            AND attribute_id IS NOT NULL
-            AND attribute_name IS NOT NULL
-            AND attribute_required IS NOT NULL
-            AND attribute_type IS NOT NULL)
+        (field_position >= 0
+            AND field_id IS NOT NULL
+            AND field_name IS NOT NULL
+            AND field_required IS NOT NULL
+            AND field_type IS NOT NULL)
     )
 );
 ```
@@ -441,12 +418,12 @@ CREATE TABLE iceberg_catalog.table_schemas (
 | --- | --- | --- | --- |
 | `table_uuid` | `UUID` | 主键组成，外键 | 标识该 Schema 版本所属的表。 |
 | `schema_id` | `INT` | 主键组成 | 同一张表内 Schema 历史版本标识。 |
-| `attribute_position` | `INT` | 主键组成 | `-1` 表示版本占位记录；`>= 0` 表示实际顶层字段，并按该顺序还原字段列表。 |
-| `attribute_id` | `INT` | 可空，版本内唯一 | 字段稳定标识。 |
-| `attribute_name` | `TEXT` | 可空 | 顶层字段名称。 |
-| `attribute_required` | `BOOLEAN` | 可空 | 字段是否必填。 |
-| `attribute_type` | `TEXT` | 可空 | 字段类型定义；复杂类型以规范化文本表示。 |
-| `attribute_doc` | `TEXT` | 可空 | 字段说明文本。 |
+| `field_position` | `INT` | 主键组成 | `-1` 表示版本占位记录；`>= 0` 表示实际顶层字段，并按该顺序还原字段列表。 |
+| `field_id` | `INT` | 可空，版本内唯一 | 字段稳定标识。 |
+| `field_name` | `TEXT` | 可空 | 顶层字段名称。 |
+| `field_required` | `BOOLEAN` | 可空 | 字段是否必填。 |
+| `field_type` | `TEXT` | 可空 | 字段类型定义；复杂类型以字符串表示保存。 |
+| `field_doc` | `TEXT` | 可空 | 字段说明文本。 |
 
 #### 对应的完整原生对象
 
@@ -454,27 +431,14 @@ CREATE TABLE iceberg_catalog.table_schemas (
 | --- | --- | --- | --- |
 | `table_uuid` | 表稳定身份 | `metadata.json.table-uuid` | 绑定表 |
 | `schema_id` | Schema 版本 ID | `metadata.json.schemas[].schema-id` | 直接对应 |
-| `attribute_position` | 字段顺序 | `metadata.json.schemas[].fields[]` 数组顺序 | `-1` 为内部控制值；`>= 0` 为字段顺序位置 |
-| `attribute_id` | 字段 ID | `metadata.json.schemas[].fields[].id` | 直接对应 |
-| `attribute_name` | 字段名 | `metadata.json.schemas[].fields[].name` | 直接对应 |
-| `attribute_required` | 必填标记 | `metadata.json.schemas[].fields[].required` | 直接对应 |
-| `attribute_type` | 字段类型 | `metadata.json.schemas[].fields[].type` | 原子类型直接保存，复杂类型规范化保存 |
-| `attribute_doc` | 字段说明 | `metadata.json.schemas[].fields[].doc` | 原生可选字段 |
+| `field_position` | 字段顺序 | `metadata.json.schemas[].fields[]` 数组顺序 | `-1` 为内部控制值；`>= 0` 为字段顺序位置 |
+| `field_id` | 字段 ID | `metadata.json.schemas[].fields[].id` | 直接对应 |
+| `field_name` | 字段名 | `metadata.json.schemas[].fields[].name` | 直接对应 |
+| `field_required` | 必填标记 | `metadata.json.schemas[].fields[].required` | 直接对应 |
+| `field_type` | 字段类型 | `metadata.json.schemas[].fields[].type` | 以字符串表示保存，当前不继续递归拆表 |
+| `field_doc` | 字段说明 | `metadata.json.schemas[].fields[].doc` | 原生可选字段 |
 
-`table_schemas` 对应的是 `metadata.json.schemas[]` 中的单个 Schema 对象。完整对象通常包含：
-
-- `type`
-- `schema-id`
-- `identifier-field-ids`
-- `fields[]`
-
-其中 `fields[]` 内部字段通常包含：
-
-- `id`
-- `name`
-- `required`
-- `type`
-- `doc`
+`table_schemas` 对应的是 `metadata.json.schemas[]` 中的单个 Schema 对象。完整对象通常包含：`type`、`schema-id`、`identifier-field-ids`、`fields[]`。其中 `fields[]` 内部字段通常包含：`id`、`name`、`required`、`type`、`doc`。
 
 #### 缓存范围说明
 
@@ -494,15 +458,15 @@ CREATE TABLE iceberg_catalog.table_schemas (
 
 1. `type` 固定结构标识，不单独落表
 2. `identifier-field-ids`
-3. 复杂类型的递归子结构不继续拆表，仅规范化写入 `attribute_type`
+3. 复杂类型的递归子结构不继续拆表，仅以字符串表示写入 `field_type`
 4. 原始 `schema_json`
 
 #### 索引说明
 
 | 索引来源 | 定义 | 说明 |
 | --- | --- | --- |
-| 主键 | `PRIMARY KEY (table_uuid, schema_id, attribute_position)` | 覆盖按表和 Schema 版本顺序还原字段列表。 |
-| 唯一约束 | `UNIQUE (table_uuid, schema_id, attribute_id)` | 保证同一 Schema 版本内字段 ID 唯一。 |
+| 主键 | `PRIMARY KEY (table_uuid, schema_id, field_position)` | 覆盖按表和 Schema 版本顺序还原字段列表。 |
+| 唯一约束 | `UNIQUE (table_uuid, schema_id, field_id)` | 保证同一 Schema 版本内字段 ID 唯一。 |
 
 ### 6.4 `snapshots`
 
@@ -576,17 +540,7 @@ CREATE TABLE iceberg_catalog.snapshots (
 | `manifest_list` | Manifest List 路径 | `metadata.json.snapshots[].manifest-list` | 直接对应 |
 | `operation` | 提交类型 | `metadata.json.snapshots[].summary.operation` | 非首期必需字段，后续如需高频操作摘要再保留。 |
 
-`snapshots` 对应的是 `metadata.json.snapshots[]` 中的单个 Snapshot 对象。完整对象通常包含：
-
-- `sequence-number`
-- `snapshot-id`
-- `schema-id`
-- `parent-snapshot-id`
-- `timestamp-ms`
-- `manifest-list`
-- `summary`
-
-其中 `summary` 为开放键值集合，常见内容包括 `operation`、新增/删除文件数和行数等。
+`snapshots` 对应的是 `metadata.json.snapshots[]` 中的单个 Snapshot 对象。完整对象通常包含：`sequence-number`、`snapshot-id`、`schema-id`、`parent-snapshot-id`、`timestamp-ms`、`manifest-list`、`summary`。其中 `summary` 为开放键值集合，常见内容包括 `operation`、新增/删除文件数和行数等。
 
 #### 缓存范围说明
 
@@ -699,17 +653,7 @@ CREATE TABLE iceberg_catalog.partition_specs (
 | `field_name` | 分区字段名 | `metadata.json.partition-specs[].fields[].name` | 直接对应 |
 | `transform` | 分区转换表达式 | `metadata.json.partition-specs[].fields[].transform` | 直接对应 |
 
-`partition_specs` 对应的是 `metadata.json.partition-specs[]` 中的单个 Partition Spec 对象。完整对象通常包含：
-
-- `spec-id`
-- `fields[]`
-
-其中 `fields[]` 内部字段通常包含：
-
-- `source-id`
-- `field-id`
-- `name`
-- `transform`
+`partition_specs` 对应的是 `metadata.json.partition-specs[]` 中的单个 Partition Spec 对象。完整对象通常包含：`spec-id`、`fields[]`。其中 `fields[]` 内部字段通常包含：`source-id`、`field-id`、`name`、`transform`。
 
 #### 缓存范围说明
 
@@ -906,13 +850,13 @@ CREATE TABLE iceberg_catalog.purge_queue (
 
 `pg_lake` 的元信息 Schema 更偏向“PostgreSQL 本地 relation 生命周期 + 文件级 runtime 管理”；当前方案更偏向“Catalog 元信息摘要缓存 + 最小化首期表设计”。两者侧重点不同，因此当前方案并不追求完全复刻 `pg_lake` 的表结构，而是参考其关键设计取舍后，选择更适合首期评审和实现落地的收敛模型。
 
-## 9. 与原有 GV 方案对比
+## 9. 与原有 openGauss 方案对比
 
-原有 GV 方案与当前方案在元信息表字段设计上的差异，主要体现在“当前方案更强调 Catalog 主键映射、Iceberg 原生版本关系，以及字段顺序的可还原性”。为便于评审，差异简要归纳如下。
+原有 openGauss 方案与当前方案在元信息表字段设计上的差异，主要体现在“当前方案更强调 Catalog 主键映射、Iceberg 原生版本关系，以及字段顺序的可还原性”。为便于评审，差异简要归纳如下。
 
 ### 9.1 `tables`
 
-| 对比项 | 原有 GV 方案 | 当前方案 |
+| 对比项 | 原有 openGauss 方案 | 当前方案 |
 | --- | --- | --- |
 | `namespace` | 无 | 有 |
 | `relid` | 无 | 有，且为待确认字段 |
@@ -934,19 +878,19 @@ CREATE TABLE iceberg_catalog.purge_queue (
 
 ### 9.2 `table_schemas`
 
-| 对比项 | 原有 GV 方案 | 当前方案 |
+| 对比项 | 原有 openGauss 方案 | 当前方案 |
 | --- | --- | --- |
 | `table_name` | 有 | 无 |
-| `attribute_position` | 无 | 有 |
+| `field_position` | 无 | 有 |
 
 说明：
 
 1. 当前方案以 `table_uuid` 作为稳定关联键，不再在该表中重复存储 `table_name`。
-2. 当前方案增加 `attribute_position`，用于表达 Schema 版本存在性以及顶层字段顺序，从而能够按原始顺序还原 `fields[]`。
+2. 当前方案增加 `field_position`，用于表达 Schema 版本存在性以及顶层字段顺序，从而能够按原始顺序还原 `fields[]`。
 
 ### 9.3 `snapshots`
 
-| 对比项 | 原有 GV 方案 | 当前方案 |
+| 对比项 | 原有 openGauss 方案 | 当前方案 |
 | --- | --- | --- |
 | `table_name` | 有 | 无 |
 | `parent_snapshot_id` | 无 | 有 |
@@ -962,7 +906,7 @@ CREATE TABLE iceberg_catalog.purge_queue (
 
 ### 9.4 `partition_specs`
 
-| 对比项 | 原有 GV 方案 | 当前方案 |
+| 对比项 | 原有 openGauss 方案 | 当前方案 |
 | --- | --- | --- |
 | `table_name` | 有 | 无 |
 | `field_position` | 无 | 有 |
@@ -974,7 +918,7 @@ CREATE TABLE iceberg_catalog.purge_queue (
 
 ### 9.5 `manifest` / `datafile`
 
-| 对比项 | 原有 GV 方案 | 当前方案 |
+| 对比项 | 原有 openGauss 方案 | 当前方案 |
 | --- | --- | --- |
 | `manifest` 表 | 有 | 无 |
 | `datafile` 表 | 有 | 无 |
@@ -982,14 +926,14 @@ CREATE TABLE iceberg_catalog.purge_queue (
 
 说明：
 
-1. 原有 GV 方案包含 `manifest` 表，字段包括 `table_name`、`path`、`length`、`partition_spec_id`、`added_snapshot_id`、`added_data_files_count`、`added_rows_count`、`existing_data_files_count`、`existing_rows_count`、`deleted_data_files_count`、`deleted_rows_count`、`partition_summaries`，用于缓存 Manifest 文件级摘要。
-2. 原有 GV 方案还包含 `datafile` 表，用于进一步缓存 Data File 明细，因此其缓存层级已经从 `metadata.json` 和 Snapshot 摘要下沉到文件级元信息。
+1. 原有 openGauss 方案包含 `manifest` 表，字段包括 `table_name`、`path`、`length`、`partition_spec_id`、`added_snapshot_id`、`added_data_files_count`、`added_rows_count`、`existing_data_files_count`、`existing_rows_count`、`deleted_data_files_count`、`deleted_rows_count`、`partition_summaries`，用于缓存 Manifest 文件级摘要。
+2. 原有 openGauss 方案还包含 `datafile` 表，用于进一步缓存 Data File 明细，因此其缓存层级已经从 `metadata.json` 和 Snapshot 摘要下沉到文件级元信息。
 3. 当前方案首期不设计 `manifest` 和 `datafile` 两张表，原因是本文聚焦 Catalog 元信息 Schema，缓存边界控制在 `tables`、`table_schemas`、`snapshots`、`partition_specs` 四类高频结构，不扩展到 Manifest / Data File 明细层。
-4. 因此，当前方案与原有 GV 方案的一个核心差异在于：原有 GV 更强调文件级缓存和执行侧可见性；当前方案更强调 Catalog 层定位关系和高频摘要缓存。
+4. 因此，当前方案与原有 openGauss 方案的一个核心差异在于：原有 openGauss 更强调文件级缓存和执行侧可见性；当前方案更强调 Catalog 层定位关系和高频摘要缓存。
 
 ### 9.6 差异总结
 
-与原有 GV 方案相比，当前方案整体上有四个明显变化：
+与原有 openGauss 方案相比，当前方案整体上有四个明显变化：
 
 1. 关联键从 `table_name` 进一步收敛到 `table_uuid`，以降低重命名和名称漂移带来的影响。
 2. 对 Schema 和 Partition Spec 增加了位置字段，用于明确表达版本结构和顺序关系。
@@ -1034,30 +978,30 @@ CREATE TABLE iceberg_catalog.tables (
 CREATE TABLE iceberg_catalog.table_schemas (
     table_uuid          UUID NOT NULL,
     schema_id           INT NOT NULL,
-    attribute_position  INT NOT NULL,
-    attribute_id        INT,
-    attribute_name      TEXT,
-    attribute_required  BOOLEAN,
-    attribute_type      TEXT,
-    attribute_doc       TEXT,
-    PRIMARY KEY (table_uuid, schema_id, attribute_position),
-    UNIQUE (table_uuid, schema_id, attribute_id),
+    field_position      INT NOT NULL,
+    field_id            INT,
+    field_name          TEXT,
+    field_required      BOOLEAN,
+    field_type          TEXT,
+    field_doc           TEXT,
+    PRIMARY KEY (table_uuid, schema_id, field_position),
+    UNIQUE (table_uuid, schema_id, field_id),
     FOREIGN KEY (table_uuid)
         REFERENCES iceberg_catalog.tables(table_uuid)
         ON DELETE CASCADE,
     CHECK (
-        (attribute_position = -1
-            AND attribute_id IS NULL
-            AND attribute_name IS NULL
-            AND attribute_required IS NULL
-            AND attribute_type IS NULL
-            AND attribute_doc IS NULL)
+        (field_position = -1
+            AND field_id IS NULL
+            AND field_name IS NULL
+            AND field_required IS NULL
+            AND field_type IS NULL
+            AND field_doc IS NULL)
         OR
-        (attribute_position >= 0
-            AND attribute_id IS NOT NULL
-            AND attribute_name IS NOT NULL
-            AND attribute_required IS NOT NULL
-            AND attribute_type IS NOT NULL)
+        (field_position >= 0
+            AND field_id IS NOT NULL
+            AND field_name IS NOT NULL
+            AND field_required IS NOT NULL
+            AND field_type IS NOT NULL)
     )
 );
 
