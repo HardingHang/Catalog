@@ -178,7 +178,7 @@ $$
 
 类型：`JSONB`，对齐 Iceberg REST API `LoadTableResult`：
 
-​```json
+```json
 {
   "metadata-location": "s3://bucket/warehouse/accounting/tax/metadata/v1.metadata.json",
   "metadata": {
@@ -258,7 +258,7 @@ $$;
 
 ### 6.1 create_namespace
 
-​````sql
+````sql
 CREATE OR REPLACE FUNCTION create_namespace(
     p_namespace  TEXT,
     p_properties JSONB DEFAULT NULL
@@ -291,7 +291,7 @@ $$
 
 类型：`JSONB`，对齐 Iceberg REST API `CreateNamespaceResponse`：
 
-​```json
+```json
 {
   "namespace": ["accounting"],
   "properties": { "owner": "Ralph", "created_at": "1452120468" }
@@ -335,7 +335,7 @@ $$;
 
 ### 6.2 list_namespaces
 
-​````sql
+````sql
 CREATE OR REPLACE FUNCTION list_namespaces(
     p_parent     TEXT    DEFAULT NULL,
     p_page_size  INTEGER DEFAULT 1000,
@@ -406,7 +406,7 @@ $$
 
 MESSAGE 格式：
 
-​```json
+```json
 {"type": "NoSuchNamespaceException", "message": "The given namespace does not exist", "stack": []}
 ```
 
@@ -435,7 +435,7 @@ $$;
 
 ### 6.3 load_namespace
 
-​````sql
+````sql
 CREATE OR REPLACE FUNCTION load_namespace(
     p_namespace TEXT
 ) RETURNS JSONB
@@ -466,7 +466,7 @@ $$
 
 类型：`JSONB`，对齐 Iceberg REST API `GetNamespaceResponse`：
 
-​```json
+```json
 {
   "namespace": ["accounting"],
   "properties": {
@@ -511,7 +511,7 @@ $$;
 
 ### 6.4 drop_namespace
 
-​````sql
+````sql
 CREATE OR REPLACE FUNCTION drop_namespace(
     p_namespace TEXT
 ) RETURNS BOOLEAN
@@ -553,7 +553,7 @@ $$
 
 MESSAGE 格式：
 
-​```json
+```json
 {"type": "NamespaceNotEmptyException", "message": "The given namespace is not empty", "stack": []}
 ```
 
@@ -579,7 +579,7 @@ $$;
 
 ### 6.5 is_namespace_existed
 
-​````sql
+````sql
 CREATE OR REPLACE FUNCTION is_namespace_existed(
     p_namespace TEXT
 ) RETURNS BOOLEAN
@@ -621,7 +621,7 @@ $$
 
 MESSAGE 格式：
 
-​```json
+```json
 {"type": "BadRequestException", "message": "p_namespace must not be NULL or empty", "stack": []}
 ```
 
@@ -644,7 +644,7 @@ $$;
 
 ### 6.6 load_table
 
-​````sql
+````sql
 CREATE OR REPLACE FUNCTION load_table(
     p_namespace TEXT,
     p_table     TEXT
@@ -677,7 +677,7 @@ $$
 
 类型：`JSONB`，对齐 Iceberg REST API `LoadTableResult`：
 
-​```json
+```json
 {
   "metadata-location": "s3://bucket/warehouse/accounting/tax/metadata/v10.metadata.json",
   "metadata": {
@@ -744,7 +744,7 @@ $$;
 
 ### 6.7 list_tables
 
-​````sql
+````sql
 CREATE OR REPLACE FUNCTION list_tables(
     p_namespace  TEXT,
     p_page_size  INTEGER DEFAULT 1000,
@@ -808,7 +808,7 @@ $$
 
 MESSAGE 格式：
 
-​```json
+```json
 {"type": "NoSuchNamespaceException", "message": "The given namespace does not exist", "stack": []}
 ```
 
@@ -831,7 +831,7 @@ $$;
 
 ### 6.8 drop_table
 
-​````sql
+````sql
 CREATE OR REPLACE FUNCTION drop_table(
     p_namespace TEXT,
     p_table     TEXT,
@@ -879,7 +879,7 @@ $$
 
 MESSAGE 格式：
 
-​```json
+```json
 {"type": "NoSuchTableException", "message": "The given table does not exist", "stack": []}
 ```
 
@@ -901,7 +901,7 @@ $$;
 
 ### 6.9 commit_table
 
-​````sql
+````sql
 CREATE OR REPLACE FUNCTION commit_table(
     p_namespace TEXT,
     p_table     TEXT,
@@ -936,7 +936,7 @@ $$
 
 `p_updates` 是一个 JSON 数组，首期仅支持 `add-snapshot` action：
 
-​```json
+```json
 [
   {
     "action": "add-snapshot",
@@ -1038,7 +1038,7 @@ $$;
 
 ### 6.10 add_column
 
-​````sql
+````sql
 CREATE OR REPLACE FUNCTION add_column(
     p_namespace    TEXT,
     p_table        TEXT,
@@ -1094,7 +1094,7 @@ $$
 
 MESSAGE 格式：
 
-​```json
+```json
 {"type": "BadRequestException", "message": "Unsupported type: fixed(16) is not supported", "stack": []}
 ```
 
@@ -1126,7 +1126,7 @@ $$;
 
 ### 6.11 rename_table
 
-​````sql
+````sql
 CREATE OR REPLACE FUNCTION rename_table(
     p_source_namespace TEXT,
     p_source_table     TEXT,
@@ -1177,7 +1177,7 @@ $$
 
 MESSAGE 格式：
 
-​```json
+```json
 {"type": "NoSuchTableException", "message": "The given table does not exist", "stack": []}
 ```
 
@@ -1207,7 +1207,7 @@ $$;
 
 ### 6.12 is_table_existed
 
-​````sql
+````sql
 CREATE OR REPLACE FUNCTION is_table_existed(
     p_namespace TEXT,
     p_table     TEXT
@@ -1253,7 +1253,7 @@ $$
 
 MESSAGE 格式：
 
-​```json
+```json
 {"type": "BadRequestException", "message": "p_table must not be NULL or empty", "stack": []}
 ```
 
@@ -1276,7 +1276,7 @@ $$;
 
 ### 6.13 update_namespace_properties
 
-​```sql
+```sql
 CREATE OR REPLACE FUNCTION update_namespace_properties(
     p_namespace TEXT,
     p_removals  JSONB DEFAULT NULL,
