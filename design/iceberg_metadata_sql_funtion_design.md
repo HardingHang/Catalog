@@ -86,7 +86,7 @@ code是标准http错误码，系统函数抛出SQLSTATE做映射:
 
 ## 4. API范围
 
-实现以下13个系统函数，覆盖 Iceberg REST Catalog 的 Namespace 和 Table 管理能力：
+实现以下14个系统函数，覆盖 Iceberg REST Catalog 的 Namespace 和 Table 管理能力：
 
 | 函数名 | 对应 REST API | HTTP 方法 | 功能 |
 |--------|--------------|-----------|------|
@@ -95,6 +95,7 @@ code是标准http错误码，系统函数抛出SQLSTATE做映射:
 | `load_namespace` | `/v1/{prefix}/namespaces/{namespace}` | GET | 加载命名空间元数据 |
 | `drop_namespace` | `/v1/{prefix}/namespaces/{namespace}` | DELETE | 删除命名空间（须为空） |
 | `is_namespace_existed` | `/v1/{prefix}/namespaces/{namespace}` | HEAD | 检查命名空间是否存在 |
+| `update_namespace_properties` | `/v1/{prefix}/namespaces/{namespace}/properties` | POST | 更新或删除 Namespace 属性 |
 | `create_table` | `/v1/{prefix}/namespaces/{namespace}/tables` | POST | 创建表 |
 | `load_table` | `/v1/{prefix}/namespaces/{namespace}/tables/{table}` | GET | 加载表元数据 |
 | `list_tables` | `/v1/{prefix}/namespaces/{namespace}/tables` | GET | 分页列出命名空间下的表 |
@@ -252,11 +253,12 @@ RAISE EXCEPTION '{"type":"BadRequestException","message":"p_namespace must not b
 4. **分区与排序**：`p_partition_spec` 和 `p_write_order` 若传入，必须符合 Iceberg 规范格式；传入后即与表绑定，后续可通过 `commit_table` 变更。
 $$;
 ````
+
 ---
 
 ### 6.1 create_namespace
 
-````sql
+​````sql
 CREATE OR REPLACE FUNCTION create_namespace(
     p_namespace  TEXT,
     p_properties JSONB DEFAULT NULL
@@ -271,32 +273,32 @@ $$;
 COMMENT ON FUNCTION create_namespace(TEXT, JSONB) IS
 $$
 ## create_namespace — 创建 Namespace
-```
+
 对应 REST API：`POST /v1/{prefix}/namespaces`
 
-#### 功能描述
+### 功能描述
 
 创建一个 Namespace，可选附带一组属性键值对。服务端可能会自动附加属性（如 `last_modified_time` 等）。实现方可以不支持 Namespace 属性。
 
-#### 参数说明
+### 参数说明
 
 | 参数 | 类型 | 必填 | 默认值 | 语义 |
 |------|------|------|--------|------|
 | `p_namespace` | `TEXT` | 是 | — | Namespace 标识符（单段，不可为空字符串） |
 | `p_properties` | `JSONB` | 否 | `NULL` | Namespace 属性键值对，为 `NULL` 等价于空对象 `{}` |
 
-#### 返回值
+### 返回值
 
 类型：`JSONB`，对齐 Iceberg REST API `CreateNamespaceResponse`：
 
-```json
+​```json
 {
   "namespace": ["accounting"],
   "properties": { "owner": "Ralph", "created_at": "1452120468" }
 }
 ```
 
-#### 异常处理
+### 异常处理
 
 | SQLSTATE | HTTP | 说明 |
 |----------|------|------|
@@ -322,16 +324,18 @@ RAISE EXCEPTION '{"type":"BadRequestException","message":"p_namespace must not b
     USING ERRCODE = 'P0001';
 ```
 
-#### 注意事项
+### 注意事项
 
 1. **一级 Namespace 限制**：仅支持单段标识符（如 `"accounting"`），不支持多段 Namespace。
 2. **属性可选**：如果服务端实现不支持 Namespace 属性，`p_properties` 传入的值可能被忽略，但不应报错。
+$$;
 ````
+
 ---
 
 ### 6.2 list_namespaces
 
-````sql
+​````sql
 CREATE OR REPLACE FUNCTION list_namespaces(
     p_parent     TEXT    DEFAULT NULL,
     p_page_size  INTEGER DEFAULT 1000,
@@ -347,13 +351,15 @@ $$;
 COMMENT ON FUNCTION list_namespaces(TEXT, INTEGER, INTEGER) IS
 $$
 
+## list_namespaces — 分页列出Namespace
+
 对应 REST API：`GET /v1/{prefix}/namespaces?parent=&pageToken=&pageSize=`
 
-#### 功能描述
+### 功能描述
 
 列出指定父级 Namespace 下的所有一级子 Namespace，支持分页。若 `p_parent` 为 `NULL`，则列出所有顶层 Namespace。
 
-#### 参数说明
+### 参数说明
 
 | 参数 | 类型 | 必填 | 默认值 | 语义 |
 |------|------|------|--------|------|
@@ -361,7 +367,7 @@ $$
 | `p_page_size` | `INTEGER` | 否 | `1000` | 每页返回的最大结果数（最小值 1） |
 | `p_page_token` | `INTEGER` | 否 | `0` | 当前分页的偏移量 |
 
-#### 返回值
+### 返回值
 
 类型：`TABLE(namespace TEXT, next_page_token INTEGER)`，对齐 Iceberg REST API `ListNamespacesResponse`：
 
@@ -390,7 +396,7 @@ $$
 (1 row)
 ```
 
-#### 异常处理
+### 异常处理
 
 | SQLSTATE | HTTP | 说明 |
 |----------|------|------|
@@ -400,7 +406,7 @@ $$
 
 MESSAGE 格式：
 
-```json
+​```json
 {"type": "NoSuchNamespaceException", "message": "The given namespace does not exist", "stack": []}
 ```
 
@@ -416,7 +422,7 @@ RAISE EXCEPTION '{"type":"BadRequestException","message":"p_page_size must be >=
     USING ERRCODE = 'P0001';
 ```
 
-#### 注意事项
+### 注意事项
 
 1. **查询类函数标记 STABLE**：此函数为只读查询，允许优化器做语句级缓存。
 2. **分页语义**：`p_page_token` 为 `0`或NULL 时返回第一页；后续使用返回的 `next_page_token` 继续翻页；最后一页的 `next_page_token` 为 `NULL`。
@@ -424,11 +430,12 @@ RAISE EXCEPTION '{"type":"BadRequestException","message":"p_page_size must be >=
 4. **无分页支持的实现**：若服务端不支持分页，可忽略 `p_page_size` 和 `p_page_token` 参数，一次性返回全部结果，此时 `next_page_token` 始终为 `NULL`。
 $$;
 ````
+
 ---
 
 ### 6.3 load_namespace
 
-````sql
+​````sql
 CREATE OR REPLACE FUNCTION load_namespace(
     p_namespace TEXT
 ) RETURNS JSONB
@@ -441,24 +448,25 @@ $$;
 
 COMMENT ON FUNCTION load_namespace(TEXT) IS
 $$
-```
+## load_namespace - 加载Namespace元数据
+
 对应 REST API：`GET /v1/{prefix}/namespaces/{namespace}`
 
-#### 功能描述
+### 功能描述
 
 返回指定 Namespace 的所有已存储元数据属性。
 
-#### 参数说明
+### 参数说明
 
 | 参数 | 类型 | 必填 | 默认值 | 语义 |
 |------|------|------|--------|------|
 | `p_namespace` | `TEXT` | 是 | — | Namespace 标识符（不可为空字符串） |
 
-#### 返回值
+### 返回值
 
 类型：`JSONB`，对齐 Iceberg REST API `GetNamespaceResponse`：
 
-```json
+​```json
 {
   "namespace": ["accounting"],
   "properties": {
@@ -498,11 +506,12 @@ RAISE EXCEPTION '{"type":"NoSuchNamespaceException","message":"The given namespa
 2. **一级 Namespace 限制**：仅支持单段标识符。
 $$;
 ````
+
 ---
 
 ### 6.4 drop_namespace
 
-````sql
+​````sql
 CREATE OR REPLACE FUNCTION drop_namespace(
     p_namespace TEXT
 ) RETURNS BOOLEAN
@@ -515,25 +524,25 @@ $$;
 
 COMMENT ON FUNCTION drop_namespace(TEXT) IS
 $$
-```
+## drop_namespace - 删除Namespace
 
 对应 REST API：`DELETE /v1/{prefix}/namespaces/{namespace}`
 
-#### 功能描述
+### 功能描述
 
 从 Catalog 中删除指定 Namespace。**Namespace 必须为空**（即其下不存在任何 Table），否则操作失败。
 
-#### 参数说明
+### 参数说明
 
 | 参数 | 类型 | 必填 | 默认值 | 语义 |
 |------|------|------|--------|------|
 | `p_namespace` | `TEXT` | 是 | — | Namespace 标识符（不可为空字符串） |
 
-#### 返回值
+### 返回值
 
 类型：`BOOLEAN`。成功删除返回 `TRUE`。
 
-#### 异常处理
+### 异常处理
 
 | SQLSTATE | HTTP | 异常类型 | 说明 |
 |----------|------|---------|------|
@@ -544,7 +553,7 @@ $$
 
 MESSAGE 格式：
 
-```json
+​```json
 {"type": "NamespaceNotEmptyException", "message": "The given namespace is not empty", "stack": []}
 ```
 
@@ -570,7 +579,7 @@ $$;
 
 ### 6.5 is_namespace_existed
 
-````sql
+​````sql
 CREATE OR REPLACE FUNCTION is_namespace_existed(
     p_namespace TEXT
 ) RETURNS BOOLEAN
@@ -583,26 +592,27 @@ $$;
 
 COMMENT ON FUNCTION is_namespace_existed(TEXT) IS
 $$
-```
+## is_namespace_existed - 检查Namespace是否存在
+
 对应 REST API：`HEAD /v1/{prefix}/namespaces/{namespace}`
 
-#### 功能描述
+### 功能描述
 
 检查指定 Namespace 是否存在于 Catalog 中。不返回响应体内容。
 
-#### 参数说明
+### 参数说明
 
 | 参数 | 类型 | 必填 | 默认值 | 语义 |
 |------|------|------|--------|------|
 | `p_namespace` | `TEXT` | 是 | — | Namespace 标识符（不可为空字符串） |
 
-#### 返回值
+### 返回值
 
 类型：`BOOLEAN`。
 - `TRUE`：Namespace 存在。
 - `FALSE`：Namespace 不存在（不抛异常，直接返回 `FALSE`）。
 
-#### 异常处理
+### 异常处理
 
 | SQLSTATE | HTTP | 说明 |
 |----------|------|------|
@@ -611,7 +621,7 @@ $$
 
 MESSAGE 格式：
 
-```json
+​```json
 {"type": "BadRequestException", "message": "p_namespace must not be NULL or empty", "stack": []}
 ```
 
@@ -628,12 +638,13 @@ RAISE EXCEPTION '{"type":"BadRequestException","message":"p_namespace must not b
 1. **查询类函数标记 STABLE**：此函数为只读查询。
 2. **不抛 NoSuchNamespaceException**：此函数设计为"检查"语义，不存在时返回 `FALSE` 而非抛异常；仅在参数错误或权限问题时才抛异常。
 3. **轻量操作**：对应 HTTP `HEAD` 方法，无需传输响应体；实现应使用低成本的存在性检查（如仅查元数据缓存）。
+$$;
 ````
 ---
 
 ### 6.6 load_table
 
-````sql
+​````sql
 CREATE OR REPLACE FUNCTION load_table(
     p_namespace TEXT,
     p_table     TEXT
@@ -733,7 +744,7 @@ $$;
 
 ### 6.7 list_tables
 
-````sql
+​````sql
 CREATE OR REPLACE FUNCTION list_tables(
     p_namespace  TEXT,
     p_page_size  INTEGER DEFAULT 1000,
@@ -820,7 +831,7 @@ $$;
 
 ### 6.8 drop_table
 
-````sql
+​````sql
 CREATE OR REPLACE FUNCTION drop_table(
     p_namespace TEXT,
     p_table     TEXT,
@@ -890,7 +901,7 @@ $$;
 
 ### 6.9 commit_table
 
-````sql
+​````sql
 CREATE OR REPLACE FUNCTION commit_table(
     p_namespace TEXT,
     p_table     TEXT,
@@ -925,7 +936,7 @@ $$
 
 `p_updates` 是一个 JSON 数组，首期仅支持 `add-snapshot` action：
 
-```json
+​```json
 [
   {
     "action": "add-snapshot",
@@ -1027,7 +1038,7 @@ $$;
 
 ### 6.10 add_column
 
-````sql
+​````sql
 CREATE OR REPLACE FUNCTION add_column(
     p_namespace    TEXT,
     p_table        TEXT,
@@ -1115,7 +1126,7 @@ $$;
 
 ### 6.11 rename_table
 
-````sql
+​````sql
 CREATE OR REPLACE FUNCTION rename_table(
     p_source_namespace TEXT,
     p_source_table     TEXT,
@@ -1196,7 +1207,7 @@ $$;
 
 ### 6.12 is_table_existed
 
-````sql
+​````sql
 CREATE OR REPLACE FUNCTION is_table_existed(
     p_namespace TEXT,
     p_table     TEXT
@@ -1262,3 +1273,103 @@ RAISE EXCEPTION '{"type":"BadRequestException","message":"p_table must not be NU
 $$;
 ````
 ---
+
+### 6.13 update_namespace_properties
+
+​```sql
+CREATE OR REPLACE FUNCTION update_namespace_properties(
+    p_namespace TEXT,
+    p_removals  JSONB DEFAULT NULL,
+    p_updates   JSONB DEFAULT NULL
+) RETURNS JSONB
+LANGUAGE plpgsql VOLATILE STRICT SET search_path = ''
+AS $$
+BEGIN
+    RAISE EXCEPTION 'not implemented' USING ERRCODE = 'P0009';
+END;
+$$;
+
+COMMENT ON FUNCTION update_namespace_properties(TEXT, JSONB, JSONB) IS
+$$
+## update_namespace_properties — 更新或删除 Namespace 属性
+
+对应 REST API：`POST /v1/{prefix}/namespaces/{namespace}/properties`
+
+### 功能描述
+
+更新或删除指定 Namespace 的属性。`p_removals` 指定要删除的属性键列表，`p_updates` 指定要设置或更新的属性键值对。未在请求中提及的属性不会被修改或删除。服务端实现可以不支持 Namespace 属性。
+
+### 参数说明
+
+| 参数 | 类型 | 必填 | 默认值 | 语义 |
+|------|------|------|--------|------|
+| `p_namespace` | `TEXT` | 是 | — | Namespace 标识符（不可为空字符串） |
+| `p_removals` | `JSONB` | 否 | `NULL` | 待删除的属性键列表（JSON 字符串数组，如 `["department", "access_group"]`）；为 `NULL` 等价于空数组 `[]` |
+| `p_updates` | `JSONB` | 否 | `NULL` | 待设置或更新的属性键值对（JSON 对象，如 `{"owner": "Hank"}`）；为 `NULL` 等价于空对象 `{}` |
+
+> **约束**：`p_removals` 和 `p_updates` 不可同时为 `NULL`/空；至少需指定其中一项。同一属性键不可同时出现在 `p_removals` 和 `p_updates` 中。
+
+### 返回值
+
+类型：`JSONB`，对齐 Iceberg REST API `UpdateNamespacePropertiesResponse`：
+
+```json
+{
+  "updated": [
+    "owner"
+  ],
+  "removed": [
+    "foo"
+  ],
+  "missing": [
+    "bar"
+  ]
+}
+```
+
+> **注意**：若服务端不支持 Namespace 属性，返回的 `properties` 字段为 `null`；若支持但未设置任何属性，`properties` 为空对象 `{}`。
+
+### 异常处理
+
+| SQLSTATE | HTTP | 说明 |
+|----------|------|------|
+| `P0001` | 400 | `p_namespace` 为 `NULL` 或空字符串；`p_removals` 格式非法（非字符串数组） |
+| `P0004` | 404 | 指定的 Namespace 不存在 |
+| `P0008` | 406 | 服务端不支持 Namespace 属性 |
+| `` | 422 | 同一键同时出现在 `p_removals` 和 `p_updates` 中 |
+| `P0009` | 500 | 服务端内部错误 |
+
+MESSAGE 格式：
+
+```json
+{"type": "NoSuchNamespaceException", "message": "The given namespace does not exist", "stack": []}
+```
+
+RAISE 示例：
+
+```sql
+-- Namespace 不存在
+RAISE EXCEPTION '{"type":"NoSuchNamespaceException","message":"The given namespace does not exist","stack":[]}'
+    USING ERRCODE = 'P0004';
+
+-- 同一键同时出现在 removals 和 updates 中
+RAISE EXCEPTION '{"type":"BadRequestException","message":"A property key was included in both removals and updates","stack":[]}'
+    USING ERRCODE = 'P0001';
+
+-- p_removals 格式非法（非数组）
+RAISE EXCEPTION '{"type":"BadRequestException","message":"p_removals must be a JSON array of strings","stack":[]}'
+    USING ERRCODE = 'P0001';
+
+-- p_removals 和 p_updates 均为空
+RAISE EXCEPTION '{"type":"BadRequestException","message":"At least one of p_removals or p_updates must be provided","stack":[]}'
+    USING ERRCODE = 'P0001';
+```
+
+### 注意事项
+
+1. **属性修改不可逆**：被 `p_removals` 删除的属性不可恢复；客户端应在删除前自行备份所需数据。
+2. **部分更新语义**：仅修改 `p_removals` 和 `p_updates` 中指定的属性；未提及的已有属性保持不变。
+3. **服务端可选实现**：若服务端不支持 Namespace 属性（返回 406），请在调用前通过 `load_namespace` 确认 `properties` 不为 `null`。
+4. **幂等性**：可通过请求头 `Idempotency-Key`（UUIDv7 格式）安全重试同一逻辑操作。
+$$;
+````
