@@ -81,7 +81,7 @@ code是标准http错误码，系统函数抛出SQLSTATE做映射:
 | P0003 | 无权限 | 403 |
 | P0004 | 资源不存在 | 404 |
 | P0005 | 资源已存在 | 409 |
-| P0008 | 服务端不支持 | 503 |
+| P0008 | 服务端不支持 | 501 |
 | P0009 | 内部服务器错误 | 500 |
 
 ## 4. API范围
@@ -115,7 +115,7 @@ SQL函数统一使用以下 `P0001`~`P0009` 自定义 SQLSTATE，对齐 HTTP 状
 | `P0003` | 403 | 无权限 |
 | `P0004` | 404 | 指定的资源不存在 |
 | `P0005` | 409 | 资源已存在 |
-| `P0008` | 503 | 服务端不支持 |
+| `P0008` | 501 | 服务端不支持 |
 | `P0009` | 500 | 服务端内部错误 |
 
 所有 RAISE 异常的 MESSAGE 格式遵循 Iceberg REST API 错误响应格式：
@@ -220,7 +220,7 @@ $$
 | `P0004` | 404 | `NoSuchNamespaceException` | 指定的 `p_namespace` 不存在 |
 | `P0005` | 409 | `AlreadyExistsException` | 同 Namespace 下已存在同名 Table |
 | `P0009` | 500 | `CommitStateUnknownException` | 服务端内部错误，创建状态未知 |
-| `P0008` | 503 | `UnsupportedOperationException` | 功能尚未实现 |
+| `P0008` | 501 | `UnsupportedOperationException` | 功能尚未实现 |
 
 MESSAGE 格式：
 
@@ -302,7 +302,7 @@ $$
 |----------|------|------|
 | `P0001` | 400 | `p_namespace` 为 `NULL` 或空字符串，或 `p_properties` 格式非法 |
 | `P0005` | 409 | 指定的 Namespace 已存在 |
-| `P0008` | 503 | 功能尚未实现 |
+| `P0008` | 501 | 功能尚未实现 |
 
 MESSAGE 格式：
 
@@ -396,7 +396,7 @@ $$
 |----------|------|------|
 | `P0001` | 400 | `p_page_size` 小于 1，或 `p_page_token` 格式无效 |
 | `P0004` | 404 | `p_parent` 指定的父级 Namespace 不存在 |
-| `P0008` | 503 | 功能尚未实现 |
+| `P0008` | 501 | 功能尚未实现 |
 
 MESSAGE 格式：
 
@@ -476,7 +476,7 @@ $$
 |----------|------|---------|------|
 | `P0001` | 400 | `BadRequestException` | `p_namespace` 为 `NULL` 或空字符串 |
 | `P0004` | 404 | `NoSuchNamespaceException` | 指定的 Namespace 不存在 |
-| `P0008` | 503 | `UnsupportedOperationException` | 功能尚未实现 |
+| `P0008` | 501 | `UnsupportedOperationException` | 功能尚未实现 |
 
 MESSAGE 格式：
 
@@ -540,7 +540,7 @@ $$
 | `P0001` | 400 | `BadRequestException` | `p_namespace` 为 `NULL` 或空字符串 |
 | `P0004` | 404 | `NoSuchNamespaceException` | 指定的 Namespace 不存在 |
 | `P0005` | 409 | `NamespaceNotEmptyException` | Namespace 非空，其下仍有 Table |
-| `P0008` | 503 | `UnsupportedOperationException` | 功能尚未实现 |
+| `P0008` | 501 | `UnsupportedOperationException` | 功能尚未实现 |
 
 MESSAGE 格式：
 
@@ -607,7 +607,7 @@ $$
 | SQLSTATE | HTTP | 说明 |
 |----------|------|------|
 | `P0001` | 400 | `p_namespace` 为 `NULL` 或空字符串 |
-| `P0008` | 503 | 功能尚未实现 |
+| `P0008` | 501 | 功能尚未实现 |
 
 MESSAGE 格式：
 
@@ -702,7 +702,7 @@ $$
 | `P0003` | 403 | `ForbiddenException` | 无权限操作 |
 | `P0004` | 404 | `NoSuchNamespaceException` | 指定的 Namespace 不存在 |
 | `P0004` | 404 | `NoSuchTableException` | 指定的 Table 不存在 |
-| `P0008` | 503 | `UnsupportedOperationException` | 功能尚未实现 |
+| `P0008` | 501 | `UnsupportedOperationException` | 功能尚未实现 |
 
 MESSAGE 格式：
 
@@ -793,7 +793,7 @@ $$
 | `P0002` | 401 | `NotAuthorizedException` | 认证失败 |
 | `P0003` | 403 | `ForbiddenException` | 无权限操作 |
 | `P0004` | 404 | `NoSuchNamespaceException` | 指定的 Namespace 不存在 |
-| `P0008` | 503 | `UnsupportedOperationException` | 功能尚未实现 |
+| `P0008` | 501 | `UnsupportedOperationException` | 功能尚未实现 |
 
 MESSAGE 格式：
 
@@ -864,7 +864,7 @@ $$
 | `P0003` | 403 | `ForbiddenException` | 无权限操作 |
 | `P0004` | 404 | `NoSuchNamespaceException` | 指定的 Namespace 不存在 |
 | `P0004` | 404 | `NoSuchTableException` | 指定的 Table 不存在 |
-| `P0008` | 503 | `UnsupportedOperationException` | 功能尚未实现 |
+| `P0008` | 501 | `UnsupportedOperationException` | 功能尚未实现 |
 
 MESSAGE 格式：
 
@@ -987,7 +987,7 @@ $$
 | `P0004` | 404 | `NoSuchTableException` | 指定的 Table 不存在 |
 | `P0005` | 409 | `CommitFailedException` | 提交冲突，客户端可重试 |
 | `P0009` | 500 | `CommitStateUnknownException` | 服务端内部错误，提交状态未知 |
-| `P0008` | 503 | `UnsupportedOperationException` | 功能尚未实现 |
+| `P0008` | 501 | `UnsupportedOperationException` | 功能尚未实现 |
 
 MESSAGE 格式：
 
@@ -1079,7 +1079,7 @@ $$
 | `P0004` | 404 | `NoSuchTableException` | 指定的 Table 不存在 |
 | `P0005` | 409 | `CommitFailedException` | 并发冲突导致提交失败，客户端可重试 |
 | `P0009` | 500 | `CommitStateUnknownException` | 服务端内部错误，提交状态未知 |
-| `P0008` | 503 | `UnsupportedOperationException` | 功能尚未实现 |
+| `P0008` | 501 | `UnsupportedOperationException` | 功能尚未实现 |
 
 MESSAGE 格式：
 
@@ -1162,7 +1162,7 @@ $$
 | `P0004` | 404 | `NoSuchNamespaceException` | 源 Namespace 或目标 Namespace 不存在 |
 | `P0004` | 404 | `NoSuchTableException` | 源 Table 不存在 |
 | `P0005` | 409 | `AlreadyExistsException` | 目标标识符已被已有的 Table 或 View 占用 |
-| `P0008` | 503 | `UnsupportedOperationException` | 功能尚未实现 |
+| `P0008` | 501 | `UnsupportedOperationException` | 功能尚未实现 |
 
 MESSAGE 格式：
 
@@ -1238,7 +1238,7 @@ $$
 | `P0001` | 400 | `BadRequestException` | `p_namespace` 或 `p_table` 为 `NULL` 或空字符串 |
 | `P0002` | 401 | `NotAuthorizedException` | 认证失败 |
 | `P0003` | 403 | `ForbiddenException` | 无权限操作 |
-| `P0008` | 503 | `UnsupportedOperationException` | 功能尚未实现 |
+| `P0008` | 501 | `UnsupportedOperationException` | 功能尚未实现 |
 
 MESSAGE 格式：
 
