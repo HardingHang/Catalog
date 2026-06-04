@@ -1276,7 +1276,7 @@ $$;
 
 ### 6.13 update_namespace_properties
 
-```sql
+````sql
 CREATE OR REPLACE FUNCTION update_namespace_properties(
     p_namespace TEXT,
     p_removals  JSONB DEFAULT NULL,
