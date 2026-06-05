@@ -51,11 +51,9 @@ OpenGauss将Iceberg REST API包装成自定义SQL函数对外提供操作Iceberg
 
 所有影响行为的外部信息必须通过参数传递，不依赖会话变量或隐藏配置。
 
-### 3.2 返回混合格式数据
+### 3.2 返回JSONB格式数据
 
-一方面从单一职责考虑，系统函数属于数据层不属于表示层，不应该对数据格式负责，虽然实现的是Iceberg REST API语义，如果按JSON、XML等特定协议格式返回数据，系统函数将失去通用性与可复用性；另一方面metadata.json字段数量非常多，嵌套层级庞大，很难以结构化关系数据完整地描述语义，因此做折中设计：
-  - 对于如list_tables、list_namespaces等列表接口，系统函数以Table格式返回。
-  - 对于如load_table、load_namespace等单对象接口，系统函数以JSONB格式返回。
+系统函数以JSONB格式返回。
 
 ### 3.3 错误抛出SQLSTATE
 
@@ -101,8 +99,8 @@ code是标准http错误码，系统函数抛出SQLSTATE做映射:
 | `load_table` | `/v1/{prefix}/namespaces/{namespace}/tables/{table}` | GET | 加载表元数据 |
 | `list_tables` | `/v1/{prefix}/namespaces/{namespace}/tables` | GET | 分页列出命名空间下的表 |
 | `drop_table` | `/v1/{prefix}/namespaces/{namespace}/tables/{table}` | DELETE | 删除表 |
-| `commit_table` | `/v1/{prefix}/namespaces/{namespace}/tables/{table}` | POST | 提交表变更（乐观锁） |
-| `add_column` | 便捷函数（封装 `commit_table`） | — | 为表添加列 |
+| `commit_table` | `/v1/{prefix}/namespaces/{namespace}/tables/{table}` | POST | 提交表变更（数据写入路径：`add-snapshot`；Requirements 由调用方传入） |
+| `add_column` | `/v1/{prefix}/namespaces/{namespace}/tables/{table}` | POST | 为表添加列（Schema 变更路径：`add-schema`；Requirements 内部自动处理） |
 | `rename_table` | `/v1/{prefix}/tables/rename` | POST | 重命名表（支持跨命名空间） |
 | `is_table_existed` | `/v1/{prefix}/namespaces/{namespace}/tables/{table}` | HEAD | 检查表是否存在 |
 
@@ -171,8 +169,8 @@ $$
 | `p_schema` | `JSONB` | 是 | — | Iceberg Schema 定义（JSON 对象，含 `type`=`"struct"` 和 `fields` 数组） |
 | `p_location` | `TEXT` | 否 | `NULL` | 表数据存储位置，为 `NULL` 时由服务端自动分配 |
 | `p_partition_spec` | `JSONB` | 否 | `NULL` | 分区规范，为 `NULL` 表示不分区 |
-| `p_write_order` | `JSONB` | 否 | `NULL` | 写入排序规则，为 `NULL` 表示无排序 |
-| `p_stage_create` | `BOOLEAN` | 否 | `FALSE` | `TRUE` 表示暂存创建（启动创建事务），`FALSE` 表示直接创建 |
+| `p_write_order` | `JSONB` | 否 | `NULL` | 写入排序规则，为 `NULL` 表示无排序。**（参数已定义，功能暂不实现）** |
+| `p_stage_create` | `BOOLEAN` | 否 | `FALSE` | `TRUE` 表示暂存创建（启动创建事务），`FALSE` 表示直接创建。**（参数已定义，功能暂不实现）** |
 | `p_properties` | `JSONB` | 否 | `NULL` | 表级属性键值对，为 `NULL` 等价于空对象 `{}` |
 
 ### 返回值
@@ -250,8 +248,8 @@ RAISE EXCEPTION '{"type":"BadRequestException","message":"p_namespace must not b
 
 1. **一级 Namespace 限制**：由于 OpenGauss Schema 不支持级联创建，`p_namespace` 仅允许单段标识符（如 `"accounting"`），不支持多段（如 `"accounting.tax"`）。
 2. **不支持 `fixed(L)` 类型**：如果 `p_schema` 中包含 `fixed(L)` 类型字段，参数校验阶段将抛出 `P0001`。
-3. **暂存创建（Stage Create）**：当 `p_stage_create = TRUE` 时，返回的元数据中 `metadata-location` 为 `null`，需调用 `commit_table` 完成事务提交。
-4. **分区与排序**：`p_partition_spec` 和 `p_write_order` 若传入，必须符合 Iceberg 规范格式；传入后即与表绑定，后续可通过 `commit_table` 变更。
+3. **暂存创建（Stage Create）**：当 `p_stage_create = TRUE` 时，返回的元数据中 `metadata-location` 为 `null`，需调用 `commit_table` 完成事务提交。**（参数已定义，功能暂不实现）**
+4. **分区与排序**：`p_partition_spec` 和 `p_write_order` 若传入，必须符合 Iceberg 规范格式；传入后即与表绑定，后续可通过 `commit_table` 变更。**`p_write_order` 参数已定义，功能暂不实现。**
 $$;
 ````
 
@@ -340,7 +338,7 @@ $$;
 CREATE OR REPLACE FUNCTION list_namespaces(
     p_parent     TEXT    DEFAULT NULL,
     p_page_size  INTEGER DEFAULT 1000,
-    p_page_token INTEGER DEFAULT 0
+    p_page_token TEXT    DEFAULT NULL
 ) RETURNS JSONB
 LANGUAGE plpgsql STABLE STRICT SET search_path = ''
 AS $$
@@ -349,7 +347,7 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION list_namespaces(TEXT, INTEGER, INTEGER) IS
+COMMENT ON FUNCTION list_namespaces(TEXT, INTEGER, TEXT) IS
 $$
 
 ## list_namespaces — 分页列出Namespace
@@ -366,42 +364,38 @@ $$
 |------|------|------|--------|------|
 | `p_parent` | `TEXT` | 否 | `NULL` | 父级 Namespace 标识符；为 `NULL` 或空字符串时返回顶层 Namespace 列表。 |
 | `p_page_size` | `INTEGER` | 否 | `1000` | 每页返回的最大结果数（最小值 1） |
-| `p_page_token` | `INTEGER` | 否 | `0` | 当前分页的偏移量 |
+| `p_page_token` | `TEXT` | 否 | `NULL` | 分页游标令牌（opaque string）；首页调用传 `NULL`，后续传上一页返回的 `next_page_token` |
 
 ### 返回值
 
-类型：`TABLE(namespace TEXT, next_page_token INTEGER)`，对齐 Iceberg REST API `ListNamespacesResponse`：
+类型：`JSONB`，对齐 Iceberg REST API `ListNamespacesResponse`：
 
-| 列名 | 类型 | 语义 |
-|------|------|------|
-| `namespace` | `TEXT` | 子 Namespace 标识符 |
-| `next_page_token` | `INTEGER` | 下一页分页令牌；每行值相同，读第一行即可决定是否翻页；为 `NULL` 时表示已到最后一页 |
-
-返回值示例：
-
+```json
+{
+  "namespaces": ["accounting", "tax"],
+  "next-page-token": "eyJvZmZzZXQ..."
+}
 ```
-  namespace   | next_page_token
---------------+-----------------
- accounting   | 10
- tax          | 10
- hr           | 10
-(3 rows)
-```
+
+| JSON 字段 | 类型 | 语义 |
+|-----------|------|------|
+| `namespaces` | `JSONB` 数组 | 子 Namespace 标识符列表（每个 Namespace 为字符串数组） |
+| `next-page-token` | `TEXT` | 下一页分页令牌；为 `NULL` 时表示已到最后一页 |
 
 最后一页示例：
 
-```
-  namespace   | next_page_token
---------------+-----------------
- audit        | NULL
-(1 row)
+```json
+{
+  "namespaces": ["audit"],
+  "next-page-token": null
+}
 ```
 
 ### 异常处理
 
 | SQLSTATE | HTTP | 说明 |
 |----------|------|------|
-| `P0001` | 400 | `p_page_size` 小于 1，或 `p_page_token` 格式无效 |
+| `P0001` | 400 | `p_page_size` 小于 1 |
 | `P0004` | 404 | `p_parent` 指定的父级 Namespace 不存在 |
 | `P0008` | 501 | 功能尚未实现 |
 
@@ -426,7 +420,7 @@ RAISE EXCEPTION '{"type":"BadRequestException","message":"p_page_size must be >=
 ### 注意事项
 
 1. **查询类函数标记 STABLE**：此函数为只读查询，允许优化器做语句级缓存。
-2. **分页语义**：`p_page_token` 为 `0`或NULL 时返回第一页；后续使用返回的 `next_page_token` 继续翻页；最后一页的 `next_page_token` 为 `NULL`。
+2. **分页语义**：`p_page_token` 为 `NULL` 时返回第一页；后续使用返回的 `next_page_token` 继续翻页；最后一页的 `next_page_token` 为 `NULL`。
 3. **一级 Namespace 限制**：`p_parent` 仅支持单段值或 `NULL`；若传入多段值（如 `"accounting.tax"`），将抛出 `P0001`。
 4. **无分页支持的实现**：若服务端不支持分页，可忽略 `p_page_size` 和 `p_page_token` 参数，一次性返回全部结果，此时 `next_page_token` 始终为 `NULL`。
 $$;
@@ -515,7 +509,7 @@ $$;
 ````sql
 CREATE OR REPLACE FUNCTION drop_namespace(
     p_namespace TEXT
-) RETURNS BOOLEAN
+) RETURNS JSONB
 LANGUAGE plpgsql VOLATILE STRICT SET search_path = ''
 AS $$
 BEGIN
@@ -541,7 +535,11 @@ $$
 
 ### 返回值
 
-类型：`BOOLEAN`。成功删除返回 `TRUE`。
+类型：`JSONB`。成功删除返回：
+
+```json
+{"success": true}
+```
 
 ### 异常处理
 
@@ -583,7 +581,7 @@ $$;
 ````sql
 CREATE OR REPLACE FUNCTION is_namespace_existed(
     p_namespace TEXT
-) RETURNS BOOLEAN
+) RETURNS JSONB
 LANGUAGE plpgsql STABLE STRICT SET search_path = ''
 AS $$
 BEGIN
@@ -609,9 +607,9 @@ $$
 
 ### 返回值
 
-类型：`BOOLEAN`。
-- `TRUE`：Namespace 存在。
-- `FALSE`：Namespace 不存在（不抛异常，直接返回 `FALSE`）。
+类型：`JSONB`。
+- Namespace 存在时返回：`{"exists": true}`
+- Namespace 不存在时返回：`{"exists": false}`（不抛异常）
 
 ### 异常处理
 
@@ -637,7 +635,7 @@ RAISE EXCEPTION '{"type":"BadRequestException","message":"p_namespace must not b
 ### 注意事项
 
 1. **查询类函数标记 STABLE**：此函数为只读查询。
-2. **不抛 NoSuchNamespaceException**：此函数设计为"检查"语义，不存在时返回 `FALSE` 而非抛异常；仅在参数错误或权限问题时才抛异常。
+2. **不抛 NoSuchNamespaceException**：此函数设计为"检查"语义，不存在时返回 `{"exists": false}` 而非抛异常；仅在参数错误或权限问题时才抛异常。
 3. **轻量操作**：对应 HTTP `HEAD` 方法，无需传输响应体；实现应使用低成本的存在性检查（如仅查元数据缓存）。
 $$;
 ````
@@ -750,7 +748,7 @@ CREATE OR REPLACE FUNCTION list_tables(
     p_namespace  TEXT,
     p_page_size  INTEGER DEFAULT 1000,
     p_page_token TEXT    DEFAULT NULL
-) RETURNS TABLE(namespace TEXT, table_name TEXT, next_page_token TEXT)
+) RETURNS JSONB
 LANGUAGE plpgsql STABLE STRICT SET search_path = ''
 AS $$
 BEGIN
@@ -778,24 +776,23 @@ $$
 
 ### 返回值
 
-类型：`TABLE(namespace TEXT, table_name TEXT, next_page_token TEXT)`，对齐 Iceberg REST API `ListTablesResponse`：
+类型：`JSONB`，对齐 Iceberg REST API `ListTablesResponse`：
 
-| 列名 | 类型 | 语义 |
-|------|------|------|
-| `namespace` | `TEXT` | Table 所属 Namespace（JSON 数组形式的字符串表示） |
-| `table_name` | `TEXT` | Table 名称 |
-| `next_page_token` | `TEXT` | 下一页分页令牌；为 `NULL` 时表示已到最后一页 |
-
-返回值示例：
-
+```json
+{
+  "identifiers": [
+    {"namespace": ["accounting"], "name": "paid"},
+    {"namespace": ["accounting"], "name": "owed"},
+    {"namespace": ["accounting"], "name": "ledger"}
+  ],
+  "next-page-token": "eyJvZmZzZXQ..."
+}
 ```
-    namespace     | table_name | next_page_token
-------------------+------------+-----------------
- ["accounting"]   | paid       | eyJvZmZzZXQ...
- ["accounting"]   | owed       | eyJvZmZzZXQ...
- ["accounting"]   | ledger     | eyJvZmZzZXQ...
-(3 rows)
-```
+
+| JSON 字段 | 类型 | 语义 |
+|-----------|------|------|
+| `identifiers` | `JSONB` 数组 | Table 标识符列表，每个元素含 `namespace`（字符串数组）和 `name`（表名） |
+| `next-page-token` | `TEXT` | 下一页分页令牌；为 `NULL` 时表示已到最后一页 |
 
 ### 异常处理
 
@@ -837,7 +834,7 @@ CREATE OR REPLACE FUNCTION drop_table(
     p_namespace TEXT,
     p_table     TEXT,
     p_purge     BOOLEAN DEFAULT FALSE
-) RETURNS BOOLEAN
+) RETURNS JSONB
 LANGUAGE plpgsql VOLATILE STRICT SET search_path = ''
 AS $$
 BEGIN
@@ -861,11 +858,15 @@ $$
 |------|------|------|--------|------|
 | `p_namespace` | `TEXT` | 是 | — | Namespace 标识符（不可为空字符串） |
 | `p_table` | `TEXT` | 是 | — | Table 名称（不可为空字符串） |
-| `p_purge` | `BOOLEAN` | 否 | `FALSE` | `TRUE` 表示同时清理底层数据和元数据文件；`FALSE` 表示仅移除 Catalog 注册 |
+| `p_purge` | `BOOLEAN` | 否 | `FALSE` | `TRUE` 表示同时清理底层数据和元数据文件；`FALSE` 表示仅移除 Catalog 注册。**（参数已定义，功能暂不实现）** |
 
 ### 返回值
 
-类型：`BOOLEAN`。成功删除返回 `TRUE`。
+类型：`JSONB`。成功删除返回：
+
+```json
+{"success": true}
+```
 
 ### 异常处理
 
@@ -904,9 +905,10 @@ $$;
 
 ````sql
 CREATE OR REPLACE FUNCTION commit_table(
-    p_namespace TEXT,
-    p_table     TEXT,
-    p_updates   JSONB
+    p_namespace    TEXT,
+    p_table        TEXT,
+    p_requirements JSONB,
+    p_updates      JSONB
 ) RETURNS JSONB
 LANGUAGE plpgsql VOLATILE STRICT SET search_path = ''
 AS $$
@@ -915,7 +917,7 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION commit_table(TEXT, TEXT, JSONB) IS
+COMMENT ON FUNCTION commit_table(TEXT, TEXT, JSONB, JSONB) IS
 $$
 ## commit_table — 提交 Table 变更
 
@@ -923,7 +925,12 @@ $$
 
 ### 功能描述
 
-向指定 Table 提交元数据变更。当前首期仅支持 `add-snapshot` 操作，用于将新生成的快照注册到 Table 元数据中。
+向指定 Table 提交元数据变更（数据写入路径）。Commit 包含两部分：
+
+- **Requirements（前置断言）**：在变更前进行校验的断言条件。当前支持 `assert-ref-snapshot-id`（JDBC Catalog 场景必选），用于乐观锁控制。所有 Requirements 必须通过校验后才会执行 Updates。
+- **Updates（变更操作）**：对表元数据的实际变更。**当前仅支持 `add-snapshot`**，用于将新生成的快照注册到 Table 元数据中。
+
+> 此函数与 `add_column` 均实现同一 REST API 端点（`updateTable`），但职责不同：`commit_table` 面向数据写入场景（add-snapshot），`add_column` 面向 Schema 变更场景（add-schema）。
 
 ### 参数说明
 
@@ -931,11 +938,40 @@ $$
 |------|------|------|--------|------|
 | `p_namespace` | `TEXT` | 是 | — | Table 所属 Namespace 标识符（不可为空字符串） |
 | `p_table` | `TEXT` | 是 | — | Table 名称（不可为空字符串） |
-| `p_updates` | `JSONB` | 是 | — | Updates 数组，当前仅支持 `add-snapshot` 操作（不可为空数组） |
+| `p_requirements` | `JSONB` | 是 | — | Requirements 数组（可为空数组 `[]`，表示无前置断言） |
+| `p_updates` | `JSONB` | 是 | — | Updates 数组（不可为空数组） |
+
+#### p_requirements 结构
+
+`p_requirements` 是 JSON 数组，每个元素包含 `type` 字段标识 Requirement 类型：
+
+**支持的 Requirement 类型：**
+
+| type | 必填字段 | 语义 |
+|------|---------|------|
+| `assert-create` | — | 断言 Table 尚未创建，用于 Stage Create 事务 |
+| `assert-table-uuid` | `uuid` | 断言 Table UUID 匹配指定值 |
+| `assert-ref-snapshot-id` | `ref`, `snapshot-id` | 断言指定 ref 的 snapshot ID 匹配；`snapshot-id` 可为 `null` 表示 ref 不得已存在 |
+| `assert-last-assigned-field-id` | `last-assigned-field-id` | 断言最后分配的列 ID 匹配 |
+| `assert-current-schema-id` | `current-schema-id` | 断言当前 Schema ID 匹配 |
+| `assert-default-spec-id` | `default-spec-id` | 断言默认 Partition Spec ID 匹配 |
+| `assert-default-sort-order-id` | `default-sort-order-id` | 断言默认 Sort Order ID 匹配 |
+
+**JDBC Catalog 场景**（`assert-ref-snapshot-id`）示例：
+
+```json
+[
+  {
+    "type": "assert-ref-snapshot-id",
+    "ref": "main",
+    "snapshot-id": 3051729675574597000
+  }
+]
+```
 
 #### p_updates 结构
 
-`p_updates` 是一个 JSON 数组，首期仅支持 `add-snapshot` action：
+`p_updates` 是 JSON 数组。**当前仅支持 `add-snapshot` action**，传入其他 action（如 `add-schema`、`set-properties` 等）将抛出 `P0001`。
 
 ```json
 [
@@ -957,6 +993,7 @@ $$
 - `timestamp-ms`（必填）：快照创建时间戳（毫秒）
 - `manifest-list`（必填）：快照 manifest list 文件位置
 - `summary`（必填）：快照摘要，`operation` 为必填字段（枚举值：`append`、`replace`、`overwrite`、`delete`）
+- `schema-id`（必填）：快照对应的 Schema ID
 - `parent-snapshot-id`（可选）：父快照 ID
 - `sequence-number`（可选）：序列号
 
@@ -992,19 +1029,19 @@ $$
 
 | SQLSTATE | HTTP | 异常类型 | 说明 |
 |----------|------|---------|------|
-| `P0001` | 400 | `BadRequestException` | 参数为 `NULL`/空，或 `p_updates` 包含非 `add-snapshot` 的 action 或格式错误 |
+| `P0001` | 400 | `BadRequestException` | 参数为 `NULL`/空，或 `p_requirements`/`p_updates` 格式错误，或包含未知的 requirement type/update action |
 | `P0002` | 401 | `NotAuthorizedException` | 认证失败 |
 | `P0003` | 403 | `ForbiddenException` | 无权限操作 |
 | `P0004` | 404 | `NoSuchNamespaceException` | 指定的 Namespace 不存在 |
 | `P0004` | 404 | `NoSuchTableException` | 指定的 Table 不存在 |
-| `P0005` | 409 | `CommitFailedException` | 提交冲突，客户端可重试 |
+| `P0005` | 409 | `CommitFailedException` | 提交冲突（一个或多个 requirements 校验失败），客户端可重试 |
 | `P0009` | 500 | `CommitStateUnknownException` | 服务端内部错误，提交状态未知 |
 | `P0008` | 501 | `UnsupportedOperationException` | 功能尚未实现 |
 
 MESSAGE 格式：
 
 ```json
-{"type": "CommitFailedException", "message": "Commit conflict: the table has been modified concurrently, retry with updated metadata", "stack": []}
+{"type": "CommitFailedException", "message": "Commit conflict: one or more requirements failed, retry with updated metadata", "stack": []}
 ```
 
 RAISE 示例：
@@ -1014,25 +1051,26 @@ RAISE 示例：
 RAISE EXCEPTION '{"type":"NoSuchTableException","message":"The given table does not exist","stack":[]}'
     USING ERRCODE = 'P0004';
 
--- 提交冲突
-RAISE EXCEPTION '{"type":"CommitFailedException","message":"Commit conflict: the table has been modified concurrently","stack":[]}'
+-- Requirements 校验失败（提交冲突）
+RAISE EXCEPTION '{"type":"CommitFailedException","message":"Commit conflict: requirement assert-ref-snapshot-id failed, the table has been modified concurrently","stack":[]}'
     USING ERRCODE = 'P0005';
 
 -- 提交状态未知
 RAISE EXCEPTION '{"type":"CommitStateUnknownException","message":"Internal server error, commit state is unknown","stack":[]}'
     USING ERRCODE = 'P0009';
 
--- 不支持的 update action
-RAISE EXCEPTION '{"type":"BadRequestException","message":"Unsupported update action: add-schema, only add-snapshot is supported","stack":[]}'
+-- 不支持的 requirement type 或 update action
+RAISE EXCEPTION '{"type":"BadRequestException","message":"Unknown requirement type: assert-unknown-type","stack":[]}'
     USING ERRCODE = 'P0001';
 ```
 
 ### 注意事项
 
-1. **首期仅支持 add-snapshot**：`p_updates` 数组中的每个元素必须是 `{"action": "add-snapshot", "snapshot": {...}}`，传入其他 action（如 `add-schema`、`set-properties` 等）将抛出 `P0001`。
-2. **原子性**：同一请求中的多个 `add-snapshot` updates 在同一事务中原子执行；要么全部成功，要么全部失败。
-3. **未知 action 严格校验**：服务端必须拒绝任何未知的 update action，返回 `P0001`。
-4. **后续扩展**：Requirements 及其他 update action 计划在后续版本中支持。
+1. **Requirements 与 Updates 解耦**：Requirements 仅做前置校验不修改元数据；Updates 执行实际变更。两者在同一事务中原子执行。
+2. **未知 type/action 严格校验**：服务端必须拒绝任何未知的 requirement type 和 update action，返回 `P0001`。
+3. **原子性**：同一请求中的多个 requirements 和 updates 在同一事务中原子执行；任一 requirement 失败则全部回滚。
+4. **JDBC Catalog 必须使用 assert-ref-snapshot-id**：数据写入前必须通过 `load_table` 获取当前 `current-snapshot-id`，在 `commit_table` 时带入 `assert-ref-snapshot-id` requirement 以确保并发安全。
+5. **仅支持 add-snapshot**：`p_updates` 仅接受 `add-snapshot` action；Schema 变更（add-schema）请使用 `add_column`。
 $$;
 ````
 ---
@@ -1041,12 +1079,11 @@ $$;
 
 ````sql
 CREATE OR REPLACE FUNCTION add_column(
-    p_namespace    TEXT,
-    p_table        TEXT,
-    p_column_name  TEXT,
-    p_column_type  TEXT,
-    p_column_doc   TEXT    DEFAULT NULL,
-    p_is_required  BOOLEAN DEFAULT FALSE
+    p_namespace   TEXT,
+    p_table       TEXT,
+    p_column_name TEXT,
+    p_column_type TEXT,
+    p_column_doc  TEXT DEFAULT NULL
 ) RETURNS JSONB
 LANGUAGE plpgsql VOLATILE STRICT SET search_path = ''
 AS $$
@@ -1055,15 +1092,21 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION add_column(TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN) IS
+COMMENT ON FUNCTION add_column(TEXT, TEXT, TEXT, TEXT, TEXT) IS
 $$
 ## add_column — 为 Table 添加列
 
-便捷函数，封装 `load_table` + `commit_table`，无需手动构造 `AddSchemaUpdate` 和 `SetCurrentSchemaUpdate`。
+与 `commit_table` 实现同一 REST API 端点（`POST /v1/{prefix}/namespaces/{namespace}/tables/{table}`），面向 Schema 变更场景（`add-schema`）。**不暴露 `requirements` 参数**（由内部自动处理），用户无需关心乐观锁细节。
 
 ### 功能描述
 
-为指定 Table 的当前 Schema 添加一个新列。内部实现直接操作 Iceberg 表元数据完成 Schema 变更。
+为指定 Table 的当前 Schema 添加一个新列。内部实现流程：
+
+1. 调用 `load_table`（`GET` 端点）获取当前表元数据和 `current-snapshot-id`
+2. 基于当前 Schema 构造新 Schema（复制已有字段，追加新列，分配新列 ID）
+3. 内部构造 `assert-ref-snapshot-id` requirement（基于 `current-snapshot-id`）
+4. 内部构造 `add-schema` + `set-current-schema` updates
+5. 调用 `updateTable` REST API 原子提交
 
 ### 参数说明
 
@@ -1074,7 +1117,8 @@ $$
 | `p_column_name` | `TEXT` | 是 | — | 新列名称（不可为空字符串） |
 | `p_column_type` | `TEXT` | 是 | — | 列数据类型（如 `"long"`, `"string"`, `"decimal(10,2)"` 等 Iceberg 类型字符串） |
 | `p_column_doc` | `TEXT` | 否 | `NULL` | 列的文档注释（可为 `NULL`） |
-| `p_is_required` | `BOOLEAN` | 否 | `FALSE` | `TRUE` 表示列不可为空；`FALSE` 表示列可为空 |
+
+> **设计约束**：当前暂不支持 `required`、`initial-default`、`write-default` 参数。新列的 `required` 默认为 `false`。
 
 ### 返回值
 
@@ -1089,7 +1133,7 @@ $$
 | `P0003` | 403 | `ForbiddenException` | 无权限操作 |
 | `P0004` | 404 | `NoSuchNamespaceException` | 指定的 Namespace 不存在 |
 | `P0004` | 404 | `NoSuchTableException` | 指定的 Table 不存在 |
-| `P0005` | 409 | `CommitFailedException` | 并发冲突导致提交失败，客户端可重试 |
+| `P0005` | 409 | `CommitFailedException` | 并发冲突导致提交失败（`assert-ref-snapshot-id` requirement 校验失败），客户端可重试 |
 | `P0009` | 500 | `CommitStateUnknownException` | 服务端内部错误，提交状态未知 |
 | `P0008` | 501 | `UnsupportedOperationException` | 功能尚未实现 |
 
@@ -1113,14 +1157,19 @@ RAISE EXCEPTION '{"type":"BadRequestException","message":"Column new_col already
 -- Table 不存在
 RAISE EXCEPTION '{"type":"NoSuchTableException","message":"The given table does not exist","stack":[]}'
     USING ERRCODE = 'P0004';
+
+-- 并发冲突
+RAISE EXCEPTION '{"type":"CommitFailedException","message":"Commit conflict: the table has been modified concurrently, retry","stack":[]}'
+    USING ERRCODE = 'P0005';
 ```
 
 ### 注意事项
 
-1. **便捷封装**：此函数封装了 Schema 变更逻辑，简化添加列的常用操作；如需更复杂的列变更（如删除列、修改列注释），请直接操作 Iceberg 元数据。
+1. **与 commit_table 分工**：`add_column` 和 `commit_table` 实现同一 REST API 端点。`add_column` 面向 Schema 变更（仅 `add-schema`），`requirements` 内部自动处理；`commit_table` 面向数据写入（仅 `add-snapshot`），`requirements` 由调用方显式传入。
 2. **不支持 `fixed(L)` 类型**：根据数据类型映射表（见 §2.2），`fixed(L)` 定长二进制类型不被 OpenGauss 支持；传入此类类型将抛出 `P0001`。
-3. **自动生成列 ID**：新列的 `id` 由服务端根据 `last-column-id` 自动分配（`last-column-id + 1`）；列 ID 不可由客户端显式指定。
-4. **并发冲突**：若在 Schema 读取和提交之间表被其他会话变更，操作可能因冲突而失败（`P0005`），需重试。
+3. **自动生成列 ID**：新列的 `id` 由服务端根据 `last-column-id` 自动分配（`last-column-id + 1`）。
+4. **并发安全**：通过 `assert-ref-snapshot-id` requirement 实现乐观锁，若在 Schema 读取和提交之间表被其他会话变更，操作将因冲突而失败（`P0005`），需从 `load_table` 开始重试。
+5. **暂不支持高级列属性**：当前版本不支持 `required`、`initial-default`、`write-default` 参数。新列的 `required` 默认为 `false`。后续版本计划支持这些高级列属性。
 $$;
 ````
 ---
@@ -1133,7 +1182,7 @@ CREATE OR REPLACE FUNCTION rename_table(
     p_source_table     TEXT,
     p_dest_namespace   TEXT,
     p_dest_table       TEXT
-) RETURNS BOOLEAN
+) RETURNS JSONB
 LANGUAGE plpgsql VOLATILE STRICT SET search_path = ''
 AS $$
 BEGIN
@@ -1162,7 +1211,11 @@ $$
 
 ### 返回值
 
-类型：`BOOLEAN`。成功重命名返回 `TRUE`。
+类型：`JSONB`。成功重命名返回：
+
+```json
+{"success": true}
+```
 
 ### 异常处理
 
@@ -1212,7 +1265,7 @@ $$;
 CREATE OR REPLACE FUNCTION is_table_existed(
     p_namespace TEXT,
     p_table     TEXT
-) RETURNS BOOLEAN
+) RETURNS JSONB
 LANGUAGE plpgsql STABLE STRICT SET search_path = ''
 AS $$
 BEGIN
@@ -1239,9 +1292,9 @@ $$
 
 ### 返回值
 
-类型：`BOOLEAN`。
-- `TRUE`：Table 存在。
-- `FALSE`：Table 不存在（不抛异常，直接返回 `FALSE`）。
+类型：`JSONB`。
+- Table 存在时返回：`{"exists": true}`
+- Table 不存在时返回：`{"exists": false}`（不抛异常）
 
 ### 异常处理
 
@@ -1269,7 +1322,7 @@ RAISE EXCEPTION '{"type":"BadRequestException","message":"p_table must not be NU
 ### 注意事项
 
 1. **查询类函数标记 STABLE**：此函数为只读查询。
-2. **不抛 NoSuchTableException**：与 `is_namespace_existed` 一致，不存在时返回 `FALSE` 而非抛异常；仅在参数错误或权限问题时才抛异常。
+2. **不抛 NoSuchTableException**：与 `is_namespace_existed` 一致，不存在时返回 `{"exists": false}` 而非抛异常；仅在参数错误或权限问题时才抛异常。
 3. **轻量操作**：对应 HTTP `HEAD` 方法，无需传输响应体；实现应使用低成本的存在性检查（如仅查元数据缓存）。
 $$;
 ````
@@ -1334,9 +1387,12 @@ $$
 
 | SQLSTATE | HTTP | 说明 |
 |----------|------|------|
-| `P0001` | 400 | `p_namespace` 为 `NULL` 或空字符串；`p_removals` 格式非法（非字符串数组） |
+| `P0001` | 400 | `p_namespace` 为 `NULL` 或空字符串；`p_removals` 格式非法（非字符串数组）；`p_removals` 和 `p_updates` 均为空 |
+| `P0002` | 401 | 认证失败 |
+| `P0003` | 403 | 无权限操作 |
 | `P0004` | 404 | 指定的 Namespace 不存在 |
 | `P0006` | 422 | 同一键同时出现在 `p_removals` 和 `p_updates` 中 |
+| `P0008` | 406/501 | 服务端不支持 Namespace 属性或功能尚未实现 |
 | `P0009` | 500 | 服务端内部错误 |
 
 MESSAGE 格式：
@@ -1354,7 +1410,7 @@ RAISE EXCEPTION '{"type":"NoSuchNamespaceException","message":"The given namespa
 
 -- 同一键同时出现在 removals 和 updates 中
 RAISE EXCEPTION '{"type":"BadRequestException","message":"A property key was included in both removals and updates","stack":[]}'
-    USING ERRCODE = 'P0001';
+    USING ERRCODE = 'P0006';
 
 -- p_removals 格式非法（非数组）
 RAISE EXCEPTION '{"type":"BadRequestException","message":"p_removals must be a JSON array of strings","stack":[]}'
