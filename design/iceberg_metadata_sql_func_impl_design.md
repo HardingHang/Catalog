@@ -467,22 +467,9 @@ void iceberg_meta_RenameTable(const char *src_namespace,
 
 ---
 
-## 7. 函数实现伪代码
+## 7. 函数实现逻辑
 
-以下为 14 个 SQL 自定义函数的实现伪代码。伪代码中：
-- `catalog` 是 `IcebergCatalog::Open(warehouse, &err)` 返回的会话级单例（第 6.3 节）
-- `table->xxx()` 表示调用 `IcebergTable` 的方法（第 6.4 节）
-- `META.xxx()` 表示调用元信息模块接口（第 7 章）
-- `VALIDATE(cond, SQLSTATE, msg)` 表示参数校验，失败则 `ereport`
-- `SDK_CHECK(ptr, error_msg, iceberg_type)` / `META_CHECK(ok, error_msg, iceberg_type)` — 检查错误消息，非 NULL 时包装为 Iceberg REST API JSON 格式并 `ereport`：
-  ```
-  void SDK_CHECK(void *result, char *error_msg, const char *iceberg_type) {
-      if (error_msg != NULL)
-          ereport(ERROR, errcode(ERRCODE_P0009),
-                  errmsg("{\"type\":\"%s\",\"message\":\"%s\",\"stack\":[]}",
-                         iceberg_type, error_msg));
-  }
-  ```
+以下为 14 个 SQL 自定义函数的实现逻辑描述。步骤中通过元信息模块接口（简称 META）和 Iceberg SDK（简称 SDK）完成实际操作。SDK/META 接口失败时返回纯文本错误描述，SQL 函数层负责将其包装为 Iceberg REST API JSON 格式后 `ereport`。
 
 ### 7.1 is_namespace_existed
 
@@ -490,9 +477,7 @@ void iceberg_meta_RenameTable(const char *src_namespace,
 is_namespace_existed(p_namespace TEXT) → JSONB
 
 1. p_namespace 为 NULL 或空串 → ereport(P0001, "namespace must not be empty")
-2. return META.NamespaceExists(p_namespace)
-        ? {"exists": true}
-        : {"exists": false}
+2. 通过 META 查询 namespace 是否存在，返回 {"exists": true} 或 {"exists": false}
 ```
 
 ### 7.2 is_table_existed
@@ -502,9 +487,7 @@ is_table_existed(p_namespace TEXT, p_table TEXT) → JSONB
 
 1. p_namespace 为 NULL 或空串 → ereport(P0001, "namespace must not be empty")
 2. p_table 为 NULL 或空串 → ereport(P0001, "table must not be empty")
-3. return META.TableExists(p_namespace, p_table)
-        ? {"exists": true}
-        : {"exists": false}
+3. 通过 META 查询表是否存在，返回 {"exists": true} 或 {"exists": false}
 ```
 
 ### 7.3 load_namespace
@@ -513,12 +496,9 @@ is_table_existed(p_namespace TEXT, p_table TEXT) → JSONB
 load_namespace(p_namespace TEXT) → JSONB
 
 1. p_namespace 为 NULL 或空串 → ereport(P0001, "namespace must not be empty")
-2. meta_info = META.GetNamespace(p_namespace)
-   if meta_info == NULL → ereport(P0004, "namespace not found")
-3. return {
-       "namespace":  [meta_info.namespace_name],
-       "properties": json_parse(meta_info.properties)
-     }
+2. 通过 META 读取 namespace 信息
+   若未找到 → ereport(P0004, "namespace not found")
+3. 返回 namespace 名称和 properties
 ```
 
 ### 7.4 list_namespaces
@@ -529,9 +509,8 @@ list_namespaces(p_parent TEXT DEFAULT NULL, p_page_size INT DEFAULT 1000,
 
 1. if p_page_size < 1 → ereport(P0001, "pageSize must be >= 1")
 2. if p_parent 非空:
-       if !META.NamespaceExists(p_parent) → ereport(P0004)
-3. result = META.ListNamespaces(p_parent, p_page_size, p_page_token)
-4. return json_parse(result)
+       通过 META 检查 parent namespace 是否存在，不存在 → ereport(P0004)
+3. 通过 META 分页列出 namespace，解析并返回结果 JSON
 ```
 
 ### 7.5 list_tables
@@ -542,9 +521,8 @@ list_tables(p_namespace TEXT, p_page_size INT DEFAULT 1000,
 
 1. p_namespace 为 NULL 或空串 → ereport(P0001, "namespace must not be empty")
 2. if p_page_size < 1 → ereport(P0001)
-3. if !META.NamespaceExists(p_namespace) → ereport(P0004)
-4. result = META.ListTables(p_namespace, p_page_size, p_page_token)
-5. return json_parse(result)
+3. 通过 META 检查 namespace 是否存在，不存在 → ereport(P0004)
+4. 通过 META 分页列出表，解析并返回结果 JSON
 ```
 
 ### 7.6 create_namespace
@@ -555,27 +533,22 @@ create_namespace(p_namespace TEXT, p_properties JSONB DEFAULT NULL) → JSONB
 1. p_namespace 为 NULL 或空串 → ereport(P0001)
 2. if p_properties 非 NULL 且非合法 JSONB object → ereport(P0001)
 
-3. // ★ 先写元信息表（利用 PK 约束仲裁并发冲突，详见 8.15）
+3. // ★ 先写元信息表（利用 PK 约束仲裁并发冲突，详见 7.15）
    //   若用户指定了 location 则直接使用；否则先用临时值占位，SDK 返回后再更新
-   props_str = p_properties ? jsonb_to_cstring(p_properties) : "{}"
-   if META.NamespaceExists(p_namespace) → ereport(P0005)
-   META.InsertNamespace(p_namespace, props_str)
+   将 p_properties 转为字符串（NULL → "{}"）
+   通过 META 检查 namespace 是否已存在，已存在 → ereport(P0005)
+   通过 META 写入 namespace 记录
 
 4. // SDK 解析 S3 路径 + 创建 marker
    // 若失败 → ereport → 事务回滚 → META INSERT 自动撤销
-   error_msg = NULL
-   nsLocation = catalog->CreateNamespace(p_namespace, props_str, &error_msg)
-   SDK_CHECK(nsLocation, error_msg, "ServiceUnavailable")
+   通过 SDK 创建 namespace（解析 S3 路径 + 创建 marker）
+   检查 SDK 返回的错误消息，非 NULL 时包装为 ServiceUnavailable JSON 格式并 ereport(P0009)
 
 5. // 若用户未指定 location，将 SDK 返回的路径更新到 properties
-   if "location" not in p_properties:
-       META.UpdateNamespaceProperties(p_namespace, "[]",
-                                       json_set("{}", "location", nsLocation))
-   pfree(nsLocation)
+   if p_properties 中无 "location" key:
+       通过 META 更新 namespace properties，将 SDK 返回的 location 写入
 
-6. meta_info = META.GetNamespace(p_namespace)
-7. return {"namespace": [meta_info.namespace_name],
-           "properties": json_parse(meta_info.properties)}
+6. 通过 META 重新读取 namespace 信息，返回 namespace 名称和 properties
 ```
 
 ### 7.7 drop_namespace
@@ -584,13 +557,13 @@ create_namespace(p_namespace TEXT, p_properties JSONB DEFAULT NULL) → JSONB
 drop_namespace(p_namespace TEXT) → JSONB
 
 1. p_namespace 为 NULL 或空串 → ereport(P0001)
-2. if !META.NamespaceExists(p_namespace) → ereport(P0004)
-3. if META.NamespaceHasTables(p_namespace) → ereport(P0005)
+2. 通过 META 检查 namespace 是否存在，不存在 → ereport(P0004)
+3. 通过 META 检查 namespace 下是否有表，有表 → ereport(P0005)
 
-4. META.DeleteNamespace(p_namespace)
+4. 通过 META 删除 namespace 记录
 
-5. // SDK 清理 S3 marker（best-effort，SDK 内部通过 catalog 执行）
-   catalog->DropNamespace(p_namespace)
+5. // SDK 清理 S3 marker（best-effort）
+   通过 SDK 清理 namespace 对应的 S3 marker
 
 6. return {"success": true}
 ```
@@ -603,15 +576,12 @@ update_namespace_properties(p_namespace TEXT, p_removals JSONB DEFAULT NULL,
 
 1. p_namespace 为 NULL 或空串 → ereport(P0001)
 2. if p_removals 和 p_updates 同时为 NULL → ereport(P0001)
-3. removals_arr: 非 NULL 则必须为 JSONB 数组，否则 P0001
-4. updates_obj:  非 NULL 则必须为 JSONB object，否则 P0001
+3. removals: 非 NULL 则必须为 JSONB 数组，否则 P0001
+4. updates:  非 NULL 则必须为 JSONB object，否则 P0001
 5. if removals ∩ updates ≠ ∅ → ereport(P0006)
 
-6. removals_str = p_removals ? jsonb_to_cstring(p_removals) : "[]"
-   updates_str  = p_updates  ? jsonb_to_cstring(p_updates)  : "{}"
-
-7. result = META.UpdateNamespaceProperties(p_namespace, removals_str, updates_str)
-8. return json_parse(result)
+6. 将 removals 和 updates 转为字符串（NULL → "[]" / "{}"）
+7. 通过 META 更新 namespace properties，解析并返回结果 JSON
 ```
 
 ### 7.9 rename_table
@@ -621,17 +591,15 @@ rename_table(p_src_ns TEXT, p_src_table TEXT,
              p_dst_ns TEXT, p_dst_table TEXT) → JSONB
 
 1. 任一参数为 NULL 或空串 → ereport(P0001)
-2. if !META.TableExists(p_src_ns, p_src_table)  → ereport(P0004)
-3. if !META.NamespaceExists(p_dst_ns)            → ereport(P0004)
-4. if META.TableExists(p_dst_ns, p_dst_table)    → ereport(P0005)
+2. 通过 META 检查源表是否存在，不存在 → ereport(P0004)
+3. 通过 META 检查目标 namespace 是否存在，不存在 → ereport(P0004)
+4. 通过 META 检查目标表是否已存在，已存在 → ereport(P0005)
 
-5. META.RenameTable(p_src_ns, p_src_table, p_dst_ns, p_dst_table)
+5. 通过 META 重命名表记录
 
-6. // SDK：若需同步更新 S3 路径，调用 catalog->RenameTable（预留）
-   // 标准 Iceberg 中此步骤为空操作
-   error_msg = NULL
-   catalog->RenameTable(p_src_ns, p_src_table, p_dst_ns, p_dst_table, &error_msg)
-   SDK_CHECK((void*)1/*non-null sentinel*/, error_msg, "ServiceUnavailable")
+6. // SDK：若需同步更新 S3 路径（预留，标准 Iceberg 中为空操作）
+   通过 SDK 执行 S3 路径迁移
+   检查 SDK 返回的错误消息，非 NULL 时包装为 ServiceUnavailable JSON 格式并 ereport(P0009)
 
 7. return {"success": true}
 ```
@@ -648,48 +616,30 @@ create_table(p_namespace TEXT, p_table_name TEXT, p_schema JSONB,
 
 2. // Schema 校验
    if p_schema.type ≠ "struct" → ereport(P0001)
-   for each field in p_schema.fields:
-       if !catalog->ValidateType(field.type, &err) → ereport(P0001, err)
+   遍历 p_schema.fields 中的每个字段：
+       通过 SDK 校验字段类型是否合法，不合法 → ereport(P0001, 错误详情)
 
 3. // 业务检查
-   if !META.NamespaceExists(p_namespace) → ereport(P0004)
-   if META.TableExists(p_namespace, p_table_name) → ereport(P0005)
+   通过 META 检查 namespace 是否存在，不存在 → ereport(P0004)
+   通过 META 检查表是否已存在，已存在 → ereport(P0005)
 
-4. // SDK 创建表（内部：UUID → 路径解析 → metadata 构造 → S3 写）
-   error_msg = NULL
-   table = catalog->CreateTable(p_namespace, p_table_name,
-                                 jsonb_to_cstring(p_schema),
-                                 p_location,
-                                 p_partition_spec ? jsonb_to_cstring(p_partition_spec) : NULL,
-                                 p_write_order    ? jsonb_to_cstring(p_write_order)    : NULL,
-                                 p_properties     ? jsonb_to_cstring(p_properties)     : NULL,
-                                 &error_msg)
-   SDK_CHECK(table, error_msg, "ServiceUnavailable")
+4. // SDK 创建表（内部：UUID 生成 → 路径解析 → metadata 构造 → S3 写）
+   将 p_schema/p_partition_spec/p_write_order/p_properties 转为字符串（NULL → NULL 指针）
+   通过 SDK 创建表
+   检查 SDK 返回的错误消息，非 NULL 时包装为 ServiceUnavailable JSON 格式并 ereport(P0009)
 
-5. // DDL 管理模块创建 delta 表和 FDW 外表 → 返回 relid
-   relid = DDL_CreateStorage(p_namespace, p_table_name, table->GetTableUUID())
+5. // DDL 管理模块创建 delta 表和 FDW 外表
+   调用 DDL 管理模块创建存储（传入 namespace、表名、SDK 返回的 table UUID），获取 relid
 
 6. // 写元信息表（PK (namespace, table_name) 仲裁并发冲突）
-   META.InsertTable(p_namespace, p_table_name,
-       MetaTableInfo{
-           .relid                = relid,
-           .table_uuid           = table->GetTableUUID(),
-           .metadata_location    = table->GetMetadataLocation(),
-           .previous_metadata_location = NULL,
-           .table_location       = table->GetTableLocation(),
-           .last_column_id       = table->GetLastColumnId(),
-           .current_schema_id    = table->GetCurrentSchemaId(),
-           .current_snapshot_id  = -1,    // 初始无 snapshot
-           .default_spec_id      = table->GetDefaultPartitionSpecId()
-       })
+   通过 META 写入表记录，包含：
+   - relid（DDL 模块返回）
+   - table_uuid / metadata_location / table_location / last_column_id /
+     current_schema_id / default_partition_spec_id（SDK 返回）
+   - previous_metadata_location = NULL
+   - current_snapshot_id = -1（初始无 snapshot）
 
-7. metadata_json = table->GetMetadataJson()
-   delete table
-   return {
-       "metadata-location": table->GetMetadataLocation(),
-       "metadata":          json_parse(metadata_json),
-       "config":            {}
-     }
+7. 通过 SDK 获取完整 metadata JSON，释放 SDK 表对象，返回结果
 ```
 
 ### 7.11 load_table
@@ -699,21 +649,14 @@ load_table(p_namespace TEXT, p_table TEXT) → JSONB
 
 1. 任一参数为 NULL 或空串 → ereport(P0001)
 
-2. info = META.GetTable(p_namespace, p_table)
-   if info == NULL → ereport(P0004, "table not found")
+2. 通过 META 读取表元信息
+   若未找到 → ereport(P0004, "table not found")
 
-3. // ★ SDK 加载表（传入 metadata_location 从 S3 读取并解析 metadata JSON）
-   error_msg = NULL
-   table = catalog->LoadTable(p_namespace, p_table, info->metadata_location, &error_msg)
-   SDK_CHECK(table, error_msg, "ServiceUnavailable")
+3. // SDK 加载表（从 S3 读取并解析 metadata JSON，含 next-row-id）
+   通过 SDK 加载表（传入 META 返回的 metadata_location）
+   检查 SDK 返回的错误消息，非 NULL 时包装为 ServiceUnavailable JSON 格式并 ereport(P0009)
 
-4. metadata_json = table->GetMetadataJson()   // 含 next-row-id
-   delete table
-   return {
-       "metadata-location": info.metadata_location,
-       "metadata":          json_parse(metadata_json),
-       "config":            {}
-     }
+4. 通过 SDK 获取完整 metadata JSON，释放 SDK 表对象，返回结果
 ```
 
 ### 7.12 drop_table
@@ -724,16 +667,15 @@ drop_table(p_namespace TEXT, p_table TEXT, p_purge BOOL DEFAULT FALSE) → JSONB
 1. 任一参数为 NULL 或空串 → ereport(P0001)
 2. if p_purge → ereport(P0008, "purge not yet implemented")
 
-3. info = META.GetTableForUpdate(p_namespace, p_table)
-   if info == NULL → ereport(P0004, "table not found")
+3. 通过 META 读取表元信息并加行锁
+   若未找到 → ereport(P0004, "table not found")
 
-4. DDL_DropStorage(p_namespace, p_table, info.table_uuid)
+4. 调用 DDL 管理模块删除存储（传入 namespace、表名、META 返回的 table_uuid）
 
-5. META.DeleteTable(p_namespace, p_table)
-     // META 内部处理 ON DELETE CASCADE
+5. 通过 META 删除表记录（META 内部处理 ON DELETE CASCADE）
 
 6. // SDK 清理（best-effort，若 purge 支持则清理数据文件）
-   catalog->DropTable(p_namespace, p_table)
+   通过 SDK 清理表对应的 S3 数据
 
 7. return {"success": true}
 ```
@@ -747,37 +689,24 @@ commit_table(p_namespace TEXT, p_table TEXT,
 1. 任一参数为 NULL → ereport(P0001)
 2. 校验 p_updates 中每个 element.action 为 "add-snapshot" → 否则 P0001
 
-3. info = META.GetTableForUpdate(p_namespace, p_table)
-   if info == NULL → ereport(P0004, "table not found")
+3. 通过 META 读取表元信息并加行锁
+   若未找到 → ereport(P0004, "table not found")
 
-4. // ★ SDK 加载表对象
-   error_msg = NULL
-   table = catalog->LoadTable(p_namespace, p_table, info->metadata_location, &error_msg)
-   SDK_CHECK(table, error_msg, "ServiceUnavailable")
+4. // SDK 加载表对象
+   通过 SDK 加载表（传入 META 返回的 metadata_location）
+   检查 SDK 返回的错误消息，非 NULL 时包装为 ServiceUnavailable JSON 格式并 ereport(P0009)
 
-5. // ★ SDK 应用 requirements + updates + 写 S3（三步合一）
-   req_str  = jsonb_to_cstring(p_requirements)
-   upd_str  = jsonb_to_cstring(p_updates)
-   error_msg = NULL
-   newMdlLocation = table->CommitTable(req_str, upd_str, &error_msg)
-   SDK_CHECK(newMdlLocation, error_msg, "CommitFailedException")
-   // CommitTable 内部：应用 requirements → 追加 snapshot → 写新 metadata JSON 到 S3
+5. // SDK 应用 requirements + updates + 写 S3（三步合一）
+   // 内部：应用 requirements → 追加 snapshot → 写新 metadata JSON 到 S3
+   将 p_requirements 和 p_updates 转为字符串
+   通过 SDK 提交表变更，返回新的 metadata_location
+   检查 SDK 返回的错误消息，非 NULL 时包装为 CommitFailedException JSON 格式并 ereport(P0005)
 
-6. // 先写元信息表（乐观锁）
-   newSnapshotId = get_snapshot_id_from(p_updates)
-   META.UpdateTable(p_namespace, p_table,
-                     info.metadata_location,    // old → 乐观锁
-                     newMdlLocation,
-                     newSnapshotId,
-                     table->GetCurrentSchemaId(),
-                     table->GetLastColumnId())
+6. // 更新元信息表（乐观锁：WHERE metadata_location = old）
+   从 p_updates 中提取新 snapshot ID
+   通过 META 更新表记录（传入旧 metadata_location 作为乐观锁）
 
-7. metadata_json = table->GetMetadataJson()
-   delete table
-   return {
-       "metadata-location": newMdlLocation,
-       "metadata":          json_parse(metadata_json)
-     }
+7. 通过 SDK 获取完整 metadata JSON，释放 SDK 表对象，返回结果
 ```
 
 ### 7.14 add_column
@@ -788,64 +717,51 @@ add_column(p_namespace TEXT, p_table TEXT,
            p_column_doc TEXT DEFAULT NULL) → JSONB
 
 1. p_namespace/p_table/p_column_name/p_column_type 任一为 NULL 或空串 → ereport(P0001)
-2. if !catalog->ValidateType(p_column_type, &err) → ereport(P0001, err)
+2. 通过 SDK 校验列类型是否合法，不合法 → ereport(P0001, 错误详情)
 
-3. info = META.GetTableForUpdate(p_namespace, p_table)
-   if info == NULL → ereport(P0004, "table not found")
+3. 通过 META 读取表元信息并加行锁
+   若未找到 → ereport(P0004, "table not found")
 
-4. // ★ SDK 加载表对象
-   error_msg = NULL
-   table = catalog->LoadTable(p_namespace, p_table, info->metadata_location, &error_msg)
-   SDK_CHECK(table, error_msg, "ServiceUnavailable")
+4. // SDK 加载表对象
+   通过 SDK 加载表（传入 META 返回的 metadata_location）
+   检查 SDK 返回的错误消息，非 NULL 时包装为 ServiceUnavailable JSON 格式并 ereport(P0009)
 
 5. // 检查列名冲突
-   currentSchema = table->GetCurrentSchema()
-   if currentSchema has field named p_column_name → ereport(P0001, "column already exists")
+   通过 SDK 获取当前 schema，若已存在同名字段 → ereport(P0001, "column already exists")
 
-6. // ★ SDK 扩展 Schema（返回新 schema + new field ID）
-   newFieldId = 0
-   newSchema = table->AddColumn(p_column_name, p_column_type,
-                                  p_column_doc, &newFieldId)
-   newSchemaId = table->GetCurrentSchemaId() + 1
+6. // SDK 扩展 Schema
+   通过 SDK 追加列（传入列名、类型、文档），获取新 field ID 和新 schema
+   新 schema ID = 当前 schema ID + 1
 
 7. // 自动构造 requirements 和 updates
    requirements = [
-       {"type":"assert-table-uuid",            "uuid": info.table_uuid},
+       {"type":"assert-table-uuid",            "uuid": <META 返回的 table_uuid>},
        {"type":"assert-ref-snapshot-id",       "ref":"main",
-                                                "snapshot-id": info.current_snapshot_id},
-       {"type":"assert-current-schema-id",     "current-schema-id": info.current_schema_id},
-       {"type":"assert-last-assigned-field-id","last-assigned-field-id": info.last_column_id}
+                                                "snapshot-id": <META 返回的 current_snapshot_id>},
+       {"type":"assert-current-schema-id",     "current-schema-id": <META 返回的 current_schema_id>},
+       {"type":"assert-last-assigned-field-id","last-assigned-field-id": <META 返回的 last_column_id>}
    ]
    updates = [
-       {"action":"add-schema",         "schema": json_parse(newSchema->GetSchemaJson()),
-                                        "last-column-id": newFieldId},
-       {"action":"set-current-schema", "schema-id": newSchemaId}
+       {"action":"add-schema",         "schema": <SDK 返回的新 schema JSON>,
+                                        "last-column-id": <SDK 返回的新 field ID>},
+       {"action":"set-current-schema", "schema-id": <新 schema ID>}
    ]
 
-8. // ★ SDK 应用变更 + 写 S3
-   error_msg = NULL
-   newMdlLocation = table->CommitTable(jsonb_to_cstring(requirements),
-                                         jsonb_to_cstring(updates), &error_msg)
-   SDK_CHECK(newMdlLocation, error_msg, "CommitFailedException")
+8. // SDK 应用变更 + 写 S3
+   将 requirements 和 updates 转为字符串
+   通过 SDK 提交表变更，返回新的 metadata_location
+   检查 SDK 返回的错误消息，非 NULL 时包装为 CommitFailedException JSON 格式并 ereport(P0005)
 
-9. // 先写元信息表（乐观锁）
-   META.UpdateTable(p_namespace, p_table,
-                     info.metadata_location,
-                     newMdlLocation,
-                     info.current_snapshot_id,  // snapshot 不变
-                     newSchemaId,               // ★ schema 更新
-                     newFieldId)                // ★ last_column_id 更新
+9. // 更新元信息表（乐观锁：WHERE metadata_location = old）
+   通过 META 更新表记录（传入旧 metadata_location 作为乐观锁）
+   更新字段：current_schema_id = 新 schema ID，last_column_id = 新 field ID
+   （snapshot 不变）
 
-10. metadata_json = table->GetMetadataJson()
-    delete table
-    return {
-        "metadata-location": newMdlLocation,
-        "metadata":          json_parse(metadata_json)
-      }
+10. 通过 SDK 获取完整 metadata JSON，释放 SDK 表对象，返回结果
 ```
 
 
-###7.15 并发调用分析
+### 7.15 并发调用分析
 
 SQL 自定义函数可能被多个客户端并发调用。以下分析每个写函数的并发安全性，核心原则是：
 
