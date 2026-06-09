@@ -683,18 +683,7 @@ create_table(p_namespace TEXT, p_table_name TEXT, p_schema JSONB,
            .default_spec_id      = table->GetDefaultPartitionSpecId()
        })
 
-7. // 缓存 schema fields
-   META.InsertSchemaFields(table->GetTableUUID(), 0,
-                            table->GetCurrentSchema()->GetSchemaJson())
-
-8. // 缓存 partition spec（有分区时展开 fields，无分区时写入占位记录 field_position=-1）
-   if p_partition_spec:
-       META.InsertPartitionSpec(table->GetTableUUID(), 0,
-                                 jsonb_to_cstring(p_partition_spec.fields))
-   else:
-       META.InsertPartitionSpec(table->GetTableUUID(), 0, placeholder_record)
-
-9. metadata_json = table->GetMetadataJson()
+7. metadata_json = table->GetMetadataJson()
    delete table
    return {
        "metadata-location": table->GetMetadataLocation(),
@@ -783,14 +772,7 @@ commit_table(p_namespace TEXT, p_table TEXT,
                      table->GetCurrentSchemaId(),
                      table->GetLastColumnId())
 
-7. // 缓存 snapshot 摘要
-   snap = table->GetCurrentSnapshot()
-   META.InsertSnapshot(info.table_uuid, snap->GetSnapshotId(),
-                        snap->GetSchemaId(), snap->GetTimestampMs(),
-                        snap->GetManifestList(),
-                        json_extract_int(snap->GetSummaryJson(), "total-records"))
-
-8. metadata_json = table->GetMetadataJson()
+7. metadata_json = table->GetMetadataJson()
    delete table
    return {
        "metadata-location": newMdlLocation,
@@ -854,11 +836,7 @@ add_column(p_namespace TEXT, p_table TEXT,
                      newSchemaId,               // ★ schema 更新
                      newFieldId)                // ★ last_column_id 更新
 
-10. // 缓存新 Schema 字段
-    META.InsertSchemaFields(info.table_uuid, newSchemaId,
-                             newSchema->GetSchemaJson())
-
-11. metadata_json = table->GetMetadataJson()
+10. metadata_json = table->GetMetadataJson()
     delete table
     return {
         "metadata-location": newMdlLocation,
