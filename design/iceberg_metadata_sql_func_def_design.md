@@ -42,6 +42,7 @@ OpenGauss将Iceberg REST API包装成自定义SQL函数对外提供操作Iceberg
 | time | TIME |
 | timestamp | TIMESTAMP |
 | decimal(p, s) | DEC[(p[, s])] |
+| floatvector(dim) | floatvector(dim) |
 
 其中不支持fixed(L)定长数据类型，涉及不支持的数据类型时SQL函数会校验并返回错误信息。
 
