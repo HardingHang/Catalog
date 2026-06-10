@@ -243,22 +243,22 @@ SQL 自定义函数通过**元信息模块**操作元信息表。本章描述 SQ
 
 以下表格列出 14 个 SQL 自定义函数与 [Iceberg REST Catalog API](https://github.com/apache/iceberg/blob/main/open-api/rest-catalog-open-api.yaml) 中对应接口的映射关系。
 
-| SQL 函数 | HTTP 方法与路径 | operationId | 说明 |
-|---------|---------------|------------|------|
-| `is_namespace_existed` | `HEAD /v1/{prefix}/namespaces/{namespace}` | `namespaceExists` | 检查命名空间是否存在，返回 204（存在）或 404（不存在） |
-| `is_table_existed` | `HEAD /v1/{prefix}/namespaces/{namespace}/tables/{table}` | `tableExists` | 检查表是否存在，返回 204（存在）或 404（不存在） |
-| `load_namespace` | `GET /v1/{prefix}/namespaces/{namespace}` | `loadNamespaceMetadata` | 加载命名空间的元数据属性 |
-| `list_namespaces` | `GET /v1/{prefix}/namespaces` | `listNamespaces` | 分页列出命名空间，支持 parent 参数过滤子级 |
-| `list_tables` | `GET /v1/{prefix}/namespaces/{namespace}/tables` | `listTables` | 分页列出指定命名空间下的表 |
-| `create_namespace` | `POST /v1/{prefix}/namespaces` | `createNamespace` | 创建命名空间，请求体包含 namespace 和 properties |
-| `drop_namespace` | `DELETE /v1/{prefix}/namespaces/{namespace}` | `dropNamespace` | 删除命名空间，要求命名空间为空（无子表） |
-| `update_namespace_properties` | `POST /v1/{prefix}/namespaces/{namespace}/properties` | `updateProperties` | 更新命名空间属性，请求体包含 removals 和 updates |
-| `rename_table` | `POST /v1/{prefix}/tables/rename` | `renameTable` | 重命名表，请求体包含 source 和 destination 标识 |
-| `create_table` | `POST /v1/{prefix}/namespaces/{namespace}/tables` | `createTable` | 创建表，支持 `stage-create` 参数 |
-| `load_table` | `GET /v1/{prefix}/namespaces/{namespace}/tables/{table}` | `loadTable` | 加载表元数据和配置信息 |
-| `drop_table` | `DELETE /v1/{prefix}/namespaces/{namespace}/tables/{table}` | `dropTable` | 删除表，支持 `purgeRequested` 参数 |
-| `commit_table` | `POST /v1/{prefix}/namespaces/{namespace}/tables/{table}` | `updateTable` | 提交表变更（requirements + updates），最终提交和阶段创建均使用此接口 |
-| `add_column` | `POST /v1/{prefix}/namespaces/{namespace}/tables/{table}` | `updateTable` | REST API 无独立加列接口，通过 `updateTable` 提交 `add-schema` 和 `set-current-schema` 更新实现 |
+| SQL 函数 | HTTP 方法与路径 | 说明 | 返回值差异 |
+|---------|---------------|------|-----------|
+| `is_namespace_existed` | `HEAD /v1/{prefix}/namespaces/{namespace}` | 检查命名空间是否存在，返回 204（存在）或 404（不存在） | REST API 返回 204 无响应体，SQL 函数包装为 `{"exists": true/false}` |
+| `is_table_existed` | `HEAD /v1/{prefix}/namespaces/{namespace}/tables/{table}` | 检查表是否存在，返回 204（存在）或 404（不存在） | 同上 |
+| `load_namespace` | `GET /v1/{prefix}/namespaces/{namespace}` | 加载命名空间的元数据属性 | 无 |
+| `list_namespaces` | `GET /v1/{prefix}/namespaces` | 分页列出命名空间，支持 parent 参数过滤子级 | 无 |
+| `list_tables` | `GET /v1/{prefix}/namespaces/{namespace}/tables` | 分页列出指定命名空间下的表 | 无 |
+| `create_namespace` | `POST /v1/{prefix}/namespaces` | 创建命名空间，请求体包含 namespace 和 properties | 无 |
+| `drop_namespace` | `DELETE /v1/{prefix}/namespaces/{namespace}` | 删除命名空间，要求命名空间为空（无子表） | REST API 返回 204 无响应体，SQL 函数包装为 `{"success": true}` |
+| `update_namespace_properties` | `POST /v1/{prefix}/namespaces/{namespace}/properties` | 更新命名空间属性，请求体包含 removals 和 updates | 无 |
+| `rename_table` | `POST /v1/{prefix}/tables/rename` | 重命名表，请求体包含 source 和 destination 标识 | REST API 返回 204 无响应体，SQL 函数包装为 `{"success": true}` |
+| `create_table` | `POST /v1/{prefix}/namespaces/{namespace}/tables` | 创建表，支持 `stage-create` 参数 | 无 |
+| `load_table` | `GET /v1/{prefix}/namespaces/{namespace}/tables/{table}` | 加载表元数据和配置信息 | 无 |
+| `drop_table` | `DELETE /v1/{prefix}/namespaces/{namespace}/tables/{table}` | 删除表，支持 `purgeRequested` 参数 | REST API 返回 204 无响应体，SQL 函数包装为 `{"success": true}` |
+| `commit_table` | `POST /v1/{prefix}/namespaces/{namespace}/tables/{table}` | 提交表变更（requirements + updates），最终提交和阶段创建均使用此接口 | 无 |
+| `add_column` | `POST /v1/{prefix}/namespaces/{namespace}/tables/{table}` | REST API 无独立加列接口，通过 `updateTable` 提交 `add-schema` 和 `set-current-schema` 更新实现 | 无 |
 
 > **注**：上述映射对应 Iceberg REST Catalog 规范中已定义的接口。14 个 SQL 函数是这些 REST API 在 PostgreSQL/OpenGauss 自定义函数层的封装，扩展了参数校验、DDL 管理模块调用、元信息表持久化等本地逻辑。
 
@@ -422,12 +422,12 @@ SQL 自定义函数通过**元信息模块**操作元信息表。本章描述 SQ
 - `p_page_size`：每页返回的最大记录数（INT 类型，可选，默认为 1000）。必须大于等于 1。
 - `p_page_token`：分页令牌（TEXT 类型，可选，默认为 NULL）。用于获取下一页结果，首次查询时为 NULL。
 
-**返回值**：JSONB 格式，包含命名空间列表（identifiers 数组）和下一页分页令牌（next-page-token）。
+**返回值**：JSONB 格式，包含命名空间列表（namespaces数组）和下一页分页令牌（next-page-token）。
 
 **返回值样例**：
 ```json
 {
-  "identifiers": [
+  "namespaces": [
     ["<命名空间层级1>", "<子命名空间1>"],
     ["<命名空间层级1>", "<子命名空间2>"]
   ],
