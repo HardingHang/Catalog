@@ -278,8 +278,8 @@ SQL 自定义函数通过**元信息模块**操作元信息表。本章描述 SQ
 ```
 
 **实现逻辑**：
-步骤1：校验入参 p_namespace 是否为 NULL 或空字符串。若是，则报P0001错误，提示"namespace must not be empty"；
-步骤2：通过 META 查询元信息表中是否存在该命名空间的记录，将结果包装为 `{"exists": true}` 或 `{"exists": false}` 的 JSONB 格式返回。
+1. 校验入参 p_namespace 是否为 NULL 或空字符串。若是，则报P0001错误，提示"namespace must not be empty"；
+2. 通过 META 查询元信息表中是否存在该命名空间的记录，将结果包装为 `{"exists": true}` 或 `{"exists": false}` 的 JSONB 格式返回。
 
 **流程图**：
 ```
@@ -323,9 +323,9 @@ SQL 自定义函数通过**元信息模块**操作元信息表。本章描述 SQ
 ```
 
 **实现逻辑**：
-步骤1：校验入参 p_namespace 是否为 NULL 或空字符串。若是，则报P0001错误，提示"namespace must not be empty"；
-步骤2：校验入参 p_table 是否为 NULL 或空字符串。若是，则报P0001错误，提示"table must not be empty"；
-步骤3：通过 META 查询元信息表中是否存在该表的记录，将结果包装为 `{"exists": true}` 或 `{"exists": false}` 的 JSONB 格式返回。
+1. 校验入参 p_namespace 是否为 NULL 或空字符串。若是，则报P0001错误，提示"namespace must not be empty"；
+2. 校验入参 p_table 是否为 NULL 或空字符串。若是，则报P0001错误，提示"table must not be empty"；
+3. 通过 META 查询元信息表中是否存在该表的记录，将结果包装为 `{"exists": true}` 或 `{"exists": false}` 的 JSONB 格式返回。
 
 **流程图**：
 ```
@@ -381,9 +381,9 @@ SQL 自定义函数通过**元信息模块**操作元信息表。本章描述 SQ
 ```
 
 **实现逻辑**：
-步骤1：校验入参 p_namespace 是否为 NULL 或空字符串。若是，则报P0001错误，提示"namespace must not be empty"；
-步骤2：通过 META 读取指定命名空间的元信息记录。若记录不存在，则报P0004错误，提示"namespace not found"；
-步骤3：将读取到的命名空间名称和 properties 包装为 JSONB 格式返回。
+1. 校验入参 p_namespace 是否为 NULL 或空字符串。若是，则报P0001错误，提示"namespace must not be empty"；
+2. 通过 META 读取指定命名空间的元信息记录。若记录不存在，则报P0004错误，提示"namespace not found"；
+3. 将读取到的命名空间名称和 properties 包装为 JSONB 格式返回。
 
 **流程图**：
 ```
@@ -436,9 +436,9 @@ SQL 自定义函数通过**元信息模块**操作元信息表。本章描述 SQ
 ```
 
 **实现逻辑**：
-步骤1：校验入参 p_page_size 是否小于 1。若是，则报P0001错误，提示"pageSize must be >= 1"；
-步骤2：若 p_parent 不为空，通过 META 检查该父级命名空间是否存在。若不存在，则报P0004错误，提示"namespace not found"；
-步骤3：通过 META 按 parent 和 page_token 分页查询元信息表，将查询结果解析为JSON 格式返回。
+1. 校验入参 p_page_size 是否小于 1。若是，则报P0001错误，提示"pageSize must be >= 1"；
+2. 若 p_parent 不为空，通过 META 检查该父级命名空间是否存在。若不存在，则报P0004错误，提示"namespace not found"；
+3. 通过 META 按 parent 和 page_token 分页查询元信息表，将查询结果解析为JSON 格式返回。
 
 **流程图**：
 ```
@@ -507,10 +507,10 @@ SQL 自定义函数通过**元信息模块**操作元信息表。本章描述 SQ
 ```
 
 **实现逻辑**：
-步骤1：校验入参 p_namespace 是否为 NULL 或空字符串。若是，则报P0001错误，提示"namespace must not be empty"；
-步骤2：校验入参 p_page_size 是否小于 1。若是，则报P0001错误，提示"pageSize must be >= 1"；
-步骤3：通过 META 检查指定命名空间是否存在。若不存在，则报P0004错误，提示"namespace not found"；
-步骤4：通过 META 按 namespace、page_size 和 page_token 分页查询元信息表，将查询结果解析为 JSON 格式返回。
+1. 校验入参 p_namespace 是否为 NULL 或空字符串。若是，则报P0001错误，提示"namespace must not be empty"；
+2. 校验入参 p_page_size 是否小于 1。若是，则报P0001错误，提示"pageSize must be >= 1"；
+3. 通过 META 检查指定命名空间是否存在。若不存在，则报P0004错误，提示"namespace not found"；
+4. 通过 META 按 namespace、page_size 和 page_token 分页查询元信息表，将查询结果解析为 JSON 格式返回。
 
 **流程图**：
 ```
@@ -575,12 +575,12 @@ SQL 自定义函数通过**元信息模块**操作元信息表。本章描述 SQ
 ```
 
 **实现逻辑**：
-步骤1：校验入参 p_namespace 是否为 NULL 或空字符串。若是，则报P0001错误，提示"namespace must not be empty"；
-步骤2：若 p_properties 不为 NULL，校验其是否为合法的 JSONB object 格式。若不是，则报P0001错误，提示"properties must be a valid JSONB object"；
-步骤3：先写元信息表（利用主键约束仲裁并发冲突，详见第6章）。将 p_properties 转为字符串（NULL 则转为 "{}"）。通过 META 检查该命名空间是否已在元信息表中存在，若已存在则报P0005错误，提示"namespace already exists"。若不存在，则通过 META 写入命名空间记录。若用户已在 p_properties 中指定了 location，则直接使用该值写入；否则先用临时值占位，待 SDK 返回实际路径后再更新；
-步骤4：通过 SDK 创建 namespace（解析 S3 路径并创建 marker）。若 SDK 返回错误消息，则将其包装为 ServiceUnavailable JSON 格式后报P0009错误，提示SDK返回的错误信息。若此步骤失败，事务将回滚，步骤3 写入的元信息表记录自动撤销；
-步骤5：若 p_properties 中不包含 "location" key，则通过 META 更新命名空间 properties，将 SDK 返回的 location 写入；
-步骤6：通过 META 重新读取命名空间信息，将名称和完整的 properties 包装为 JSONB 格式返回。
+1. 校验入参 p_namespace 是否为 NULL 或空字符串。若是，则报P0001错误，提示"namespace must not be empty"；
+2. 若 p_properties 不为 NULL，校验其是否为合法的 JSONB object 格式。若不是，则报P0001错误，提示"properties must be a valid JSONB object"；
+3. 先写元信息表（利用主键约束仲裁并发冲突，详见第6章）。将 p_properties 转为字符串（NULL 则转为 "{}"）。通过 META 检查该命名空间是否已在元信息表中存在，若已存在则报P0005错误，提示"namespace already exists"。若不存在，则通过 META 写入命名空间记录。若用户已在 p_properties 中指定了 location，则直接使用该值写入；否则先用临时值占位，待 SDK 返回实际路径后再更新；
+4. 通过 SDK 创建 namespace（解析 S3 路径并创建 marker）。若 SDK 返回错误消息，则将其包装为 ServiceUnavailable JSON 格式后报P0009错误，提示SDK返回的错误信息。若此步骤失败，事务将回滚，步骤3 写入的元信息表记录自动撤销；
+5. 若 p_properties 中不包含 "location" key，则通过 META 更新命名空间 properties，将 SDK 返回的 location 写入；
+6. 通过 META 重新读取命名空间信息，将名称和完整的 properties 包装为 JSONB 格式返回。
 
 **流程图**：
 ```
@@ -668,12 +668,12 @@ SQL 自定义函数通过**元信息模块**操作元信息表。本章描述 SQ
 ```
 
 **实现逻辑**：
-步骤1：校验入参 p_namespace 是否为 NULL 或空字符串。若是，则报P0001错误，提示"namespace must not be empty"；
-步骤2：通过 META 检查指定命名空间是否存在。若不存在，则报P0004错误，提示"namespace not found"；
-步骤3：通过 META 检查该命名空间下是否仍存在表。若存在表，则报P0005错误，提示"namespace is not empty, cannot be dropped"；
-步骤4：通过 META 删除该命名空间的元信息记录；
-步骤5：通过 SDK 清理该命名空间在 S3 上对应的 marker（best-effort 操作，失败不影响整体结果）；
-步骤6：返回 `{"success": true}`。
+1. 校验入参 p_namespace 是否为 NULL 或空字符串。若是，则报P0001错误，提示"namespace must not be empty"；
+2. 通过 META 检查指定命名空间是否存在。若不存在，则报P0004错误，提示"namespace not found"；
+3. 通过 META 检查该命名空间下是否仍存在表。若存在表，则报P0005错误，提示"namespace is not empty, cannot be dropped"；
+4. 通过 META 删除该命名空间的元信息记录；
+5. 通过 SDK 清理该命名空间在 S3 上对应的 marker（best-effort 操作，失败不影响整体结果）；
+6. 返回 `{"success": true}`。
 
 **流程图**：
 ```
@@ -742,13 +742,13 @@ SQL 自定义函数通过**元信息模块**操作元信息表。本章描述 SQ
 ```
 
 **实现逻辑**：
-步骤1：校验入参 p_namespace 是否为 NULL 或空字符串。若是，则报P0001错误，提示"namespace must not be empty"；
-步骤2：若 p_removals 和 p_updates 同时为 NULL，则报P0001错误，提示"at least one of removals or updates must be specified"；
-步骤3：若 p_removals 不为 NULL，校验其是否为合法的 JSONB 数组格式。若不是，则报P0001错误，提示"removals must be a valid JSONB array"；
-步骤4：若 p_updates 不为 NULL，校验其是否为合法的 JSONB object 格式。若不是，则报P0001错误，提示"updates must be a valid JSONB object"；
-步骤5：检查 p_removals 和 p_updates 是否存在交集（即同一个 key 既在删除列表中又在更新列表中）。若存在交集，则报P0006错误，提示"removals and updates must not have common keys"；
-步骤6：将 p_removals 和 p_updates 转为字符串（NULL 分别转为 "[]" 和 "{}"），通过 META 执行 properties 更新操作；
-步骤7：将 META 返回的更新结果（含 updated、removed、missing 三个数组）解析为 JSONB 格式返回。
+1. 校验入参 p_namespace 是否为 NULL 或空字符串。若是，则报P0001错误，提示"namespace must not be empty"；
+2. 若 p_removals 和 p_updates 同时为 NULL，则报P0001错误，提示"at least one of removals or updates must be specified"；
+3. 若 p_removals 不为 NULL，校验其是否为合法的 JSONB 数组格式。若不是，则报P0001错误，提示"removals must be a valid JSONB array"；
+4. 若 p_updates 不为 NULL，校验其是否为合法的 JSONB object 格式。若不是，则报P0001错误，提示"updates must be a valid JSONB object"；
+5. 检查 p_removals 和 p_updates 是否存在交集（即同一个 key 既在删除列表中又在更新列表中）。若存在交集，则报P0006错误，提示"removals and updates must not have common keys"；
+6. 将 p_removals 和 p_updates 转为字符串（NULL 分别转为 "[]" 和 "{}"），通过 META 执行 properties 更新操作；
+7. 将 META 返回的更新结果（含 updated、removed、missing 三个数组）解析为 JSONB 格式返回。
 
 **流程图**：
 ```
@@ -825,13 +825,13 @@ SQL 自定义函数通过**元信息模块**操作元信息表。本章描述 SQ
 ```
 
 **实现逻辑**：
-步骤1：校验四个入参是否存在 NULL 或空字符串。若有任一参数不符合要求，则报P0001错误，提示"namespace and table name must not be empty"；
-步骤2：通过 META 检查源表是否存在。若不存在，则报P0004错误，提示"table not found"；
-步骤3：通过 META 检查目标命名空间是否存在。若不存在，则报P0004错误，提示"namespace not found"；
-步骤4：通过 META 检查目标表名在目标命名空间下是否已存在。若已存在，则报P0005错误，提示"table already exists"；
-步骤5：通过 META 执行表重命名操作（更新元信息表中的表名和命名空间字段）；
-步骤6：通过 SDK 执行 S3 路径迁移（预留给未来实现，标准 Iceberg 场景下当前为空操作）。若 SDK 返回错误消息，则将其包装为 ServiceUnavailable JSON 格式后报P0009错误，提示SDK返回的错误信息；
-步骤7：返回 `{"success": true}`。
+1. 校验四个入参是否存在 NULL 或空字符串。若有任一参数不符合要求，则报P0001错误，提示"namespace and table name must not be empty"；
+2. 通过 META 检查源表是否存在。若不存在，则报P0004错误，提示"table not found"；
+3. 通过 META 检查目标命名空间是否存在。若不存在，则报P0004错误，提示"namespace not found"；
+4. 通过 META 检查目标表名在目标命名空间下是否已存在。若已存在，则报P0005错误，提示"table already exists"；
+5. 通过 META 执行表重命名操作（更新元信息表中的表名和命名空间字段）；
+6. 通过 SDK 执行 S3 路径迁移（预留给未来实现，标准 Iceberg 场景下当前为空操作）。若 SDK 返回错误消息，则将其包装为 ServiceUnavailable JSON 格式后报P0009错误，提示SDK返回的错误信息；
+7. 返回 `{"success": true}`。
 
 **流程图**：
 ```
@@ -938,13 +938,13 @@ SQL 自定义函数通过**元信息模块**操作元信息表。本章描述 SQ
 ```
 
 **实现逻辑**：
-步骤1：校验入参 p_namespace 和 p_table_name 是否为 NULL 或空字符串。若有任一不符合，则报P0001错误，提示"namespace and table name must not be empty"；
-步骤2：执行 Schema 校验。若 p_schema 的 type 字段不为 "struct"，则报P0001错误，提示"schema type must be 'struct'"。遍历 p_schema.fields 中的每个字段，通过 SDK 校验其 Iceberg 类型字符串是否合法；若任一字段类型不合法，则报P0001错误，提示SDK返回的类型校验错误信息；
-步骤3：执行业务检查。通过 META 检查指定命名空间是否存在，若不存在则报P0004错误，提示"namespace not found"。通过 META 检查该命名空间下是否已存在同名表，若已存在则报P0005错误，提示"table already exists"；
-步骤4：通过 SDK 创建表。将 p_schema、p_partition_spec、p_write_order、p_properties 转为字符串（NULL 转为 NULL 指针传入）。SDK 内部完成 UUID 生成、S3 路径解析、metadata JSON 构造和 S3 写入。若 SDK 返回错误消息，则将其包装为 ServiceUnavailable JSON 格式后报P0009错误，提示SDK返回的错误信息；
-步骤5：调用 DDL 管理模块创建 delta 表及 FDW 外表（传入命名空间名、表名、SDK 返回的 table_uuid），获取系统分配的 relid；
-步骤6：写入元信息表，利用主键 (namespace, table_name) 仲裁并发冲突（详见 6.2）。通过 META 写入表记录，包含以下字段：relid（DDL 模块返回）、table_uuid、metadata_location、table_location、last_column_id、current_schema_id、default_partition_spec_id（以上由 SDK 返回）、previous_metadata_location（初始为 NULL）、current_snapshot_id（初始为 -1，表示尚无快照）；
-步骤7：通过 SDK 获取完整 metadata JSON，释放 SDK 表对象，将 metadata JSON 包装为 JSONB 格式返回。
+1. 校验入参 p_namespace 和 p_table_name 是否为 NULL 或空字符串。若有任一不符合，则报P0001错误，提示"namespace and table name must not be empty"；
+2. 执行 Schema 校验。若 p_schema 的 type 字段不为 "struct"，则报P0001错误，提示"schema type must be 'struct'"。遍历 p_schema.fields 中的每个字段，通过 SDK 校验其 Iceberg 类型字符串是否合法；若任一字段类型不合法，则报P0001错误，提示SDK返回的类型校验错误信息；
+3. 执行业务检查。通过 META 检查指定命名空间是否存在，若不存在则报P0004错误，提示"namespace not found"。通过 META 检查该命名空间下是否已存在同名表，若已存在则报P0005错误，提示"table already exists"；
+4. 通过 SDK 创建表。将 p_schema、p_partition_spec、p_write_order、p_properties 转为字符串（NULL 转为 NULL 指针传入）。SDK 内部完成 UUID 生成、S3 路径解析、metadata JSON 构造和 S3 写入。若 SDK 返回错误消息，则将其包装为 ServiceUnavailable JSON 格式后报P0009错误，提示SDK返回的错误信息；
+5. 调用 DDL 管理模块创建 delta 表及 FDW 外表（传入命名空间名、表名、SDK 返回的 table_uuid），获取系统分配的 relid；
+6. 写入元信息表，利用主键 (namespace, table_name) 仲裁并发冲突（详见 6.2）。通过 META 写入表记录，包含以下字段：relid（DDL 模块返回）、table_uuid、metadata_location、table_location、last_column_id、current_schema_id、default_partition_spec_id（以上由 SDK 返回）、previous_metadata_location（初始为 NULL）、current_snapshot_id（初始为 -1，表示尚无快照）；
+7. 通过 SDK 获取完整 metadata JSON，释放 SDK 表对象，将 metadata JSON 包装为 JSONB 格式返回。
 
 **流程图**：
 ```
@@ -1046,10 +1046,10 @@ SQL 自定义函数通过**元信息模块**操作元信息表。本章描述 SQ
 ```
 
 **实现逻辑**：
-步骤1：校验入参 p_namespace 和 p_table 是否存在 NULL 或空字符串。若有任一不符合，则报P0001错误，提示"namespace and table name must not be empty"；
-步骤2：通过 META 读取表元信息记录。若记录不存在，则报P0004错误，提示"table not found"；
-步骤3：通过 SDK 加载表对象（传入步骤2 获取的 metadata_location，SDK 从 S3 读取并解析 metadata JSON，包含 next-row-id）。若 SDK 返回错误消息，则将其包装为 ServiceUnavailable JSON 格式后报P0009错误，提示SDK返回的错误信息；
-步骤4：通过 SDK 获取完整 metadata JSON，释放 SDK 表对象，将 metadata JSON 包装为 JSONB 格式返回。
+1. 校验入参 p_namespace 和 p_table 是否存在 NULL 或空字符串。若有任一不符合，则报P0001错误，提示"namespace and table name must not be empty"；
+2. 通过 META 读取表元信息记录。若记录不存在，则报P0004错误，提示"table not found"；
+3. 通过 SDK 加载表对象（传入步骤2 获取的 metadata_location，SDK 从 S3 读取并解析 metadata JSON，包含 next-row-id）。若 SDK 返回错误消息，则将其包装为 ServiceUnavailable JSON 格式后报P0009错误，提示SDK返回的错误信息；
+4. 通过 SDK 获取完整 metadata JSON，释放 SDK 表对象，将 metadata JSON 包装为 JSONB 格式返回。
 
 **流程图**：
 ```
@@ -1107,13 +1107,13 @@ SQL 自定义函数通过**元信息模块**操作元信息表。本章描述 SQ
 ```
 
 **实现逻辑**：
-步骤1：校验入参 p_namespace 和 p_table 是否存在 NULL 或空字符串。若有任一不符合，则报P0001错误，提示"namespace and table name must not be empty"；
-步骤2：若 p_purge 为 TRUE，则报P0008错误，提示"purge not yet implemented"；
-步骤3：通过 META 读取表元信息记录并加行锁（FOR UPDATE）。若记录不存在，则报P0004错误，提示"table not found"；
-步骤4：调用 DDL 管理模块删除该表对应的 delta 表和 FDW 外表（传入命名空间名、表名、步骤3 获取的 table_uuid）；
-步骤5：通过 META 删除表元信息记录（元信息模块内部通过 ON DELETE CASCADE 处理关联的快照、schema 等记录）；
-步骤6：通过 SDK 清理该表在 S3 上对应的数据文件（best-effort 操作，失败不影响整体结果）；
-步骤7：返回 `{"success": true}`。
+1. 校验入参 p_namespace 和 p_table 是否存在 NULL 或空字符串。若有任一不符合，则报P0001错误，提示"namespace and table name must not be empty"；
+2. 若 p_purge 为 TRUE，则报P0008错误，提示"purge not yet implemented"；
+3. 通过 META 读取表元信息记录并加行锁（FOR UPDATE）。若记录不存在，则报P0004错误，提示"table not found"；
+4. 调用 DDL 管理模块删除该表对应的 delta 表和 FDW 外表（传入命名空间名、表名、步骤3 获取的 table_uuid）；
+5. 通过 META 删除表元信息记录（元信息模块内部通过 ON DELETE CASCADE 处理关联的快照、schema 等记录）；
+6. 通过 SDK 清理该表在 S3 上对应的数据文件（best-effort 操作，失败不影响整体结果）；
+7. 返回 `{"success": true}`。
 
 **流程图**：
 ```
@@ -1212,13 +1212,13 @@ SQL 自定义函数通过**元信息模块**操作元信息表。本章描述 SQ
 ```
 
 **实现逻辑**：
-步骤1：校验四个入参是否存在 NULL。若有任一为 NULL，则报P0001错误，提示"parameters must not be null"；
-步骤2：校验 p_updates 数组中每个元素的 action 字段是否均为 "add-snapshot"。若存在其他 action 类型，则报P0001错误，提示"only 'add-snapshot' action is supported"；
-步骤3：通过 META 读取表元信息记录并加行锁（FOR UPDATE），串行化同一表的并发 commit 操作。若记录不存在，则报P0004错误，提示"table not found"；
-步骤4：通过 SDK 加载表对象（传入步骤3 获取的 metadata_location，SDK 从 S3 读取并解析 metadata JSON）。若 SDK 返回错误消息，则将其包装为 ServiceUnavailable JSON 格式后报P0009错误，提示SDK返回的错误信息；
-步骤5：通过 SDK 提交表变更（内部三步合一：应用 requirements → 追加 snapshot → 写新 metadata JSON 到 S3）。将 p_requirements 和 p_updates 转为字符串传给 SDK，SDK 返回新的 metadata_location。若 SDK 返回错误消息（如 requirements 校验不通过），则将其包装为 CommitFailedException JSON 格式后报P0005错误，提示SDK返回的提交失败信息；
-步骤6：更新元信息表，以旧 metadata_location 为乐观锁条件（WHERE metadata_location = 旧值）。先从 p_updates 中提取新 snapshot ID，再通过 META 更新表记录。若在步骤3 和本步骤之间 metadata_location 被其他事务修改，乐观锁条件不匹配，则报P0005错误，提示"Commit conflict: the table has been modified concurrently"；
-步骤7：通过 SDK 获取完整 metadata JSON，释放 SDK 表对象，将 metadata JSON 包装为 JSONB 格式返回。
+1. 校验四个入参是否存在 NULL。若有任一为 NULL，则报P0001错误，提示"parameters must not be null"；
+2. 校验 p_updates 数组中每个元素的 action 字段是否均为 "add-snapshot"。若存在其他 action 类型，则报P0001错误，提示"only 'add-snapshot' action is supported"；
+3. 通过 META 读取表元信息记录并加行锁（FOR UPDATE），串行化同一表的并发 commit 操作。若记录不存在，则报P0004错误，提示"table not found"；
+4. 通过 SDK 加载表对象（传入步骤3 获取的 metadata_location，SDK 从 S3 读取并解析 metadata JSON）。若 SDK 返回错误消息，则将其包装为 ServiceUnavailable JSON 格式后报P0009错误，提示SDK返回的错误信息；
+5. 通过 SDK 提交表变更（内部三步合一：应用 requirements → 追加 snapshot → 写新 metadata JSON 到 S3）。将 p_requirements 和 p_updates 转为字符串传给 SDK，SDK 返回新的 metadata_location。若 SDK 返回错误消息（如 requirements 校验不通过），则将其包装为 CommitFailedException JSON 格式后报P0005错误，提示SDK返回的提交失败信息；
+6. 更新元信息表，以旧 metadata_location 为乐观锁条件（WHERE metadata_location = 旧值）。先从 p_updates 中提取新 snapshot ID，再通过 META 更新表记录。若在步骤3 和本步骤之间 metadata_location 被其他事务修改，乐观锁条件不匹配，则报P0005错误，提示"Commit conflict: the table has been modified concurrently"；
+7. 通过 SDK 获取完整 metadata JSON，释放 SDK 表对象，将 metadata JSON 包装为 JSONB 格式返回。
 
 **流程图**：
 ```
@@ -1327,16 +1327,16 @@ SQL 自定义函数通过**元信息模块**操作元信息表。本章描述 SQ
 ```
 
 **实现逻辑**：
-步骤1：校验入参 p_namespace、p_table、p_column_name、p_column_type 是否存在 NULL 或空字符串。若有任一不符合，则报P0001错误，提示"namespace, table, column name and column type must not be empty"；
-步骤2：通过 SDK 校验 p_column_type 是否为合法的 Iceberg 类型字符串。若不合法，则报P0001错误，提示SDK返回的类型校验错误信息；
-步骤3：通过 META 读取表元信息记录并加行锁（FOR UPDATE）。若记录不存在，则报P0004错误，提示"table not found"；
-步骤4：通过 SDK 加载表对象（传入步骤3 获取的 metadata_location）。若 SDK 返回错误消息，则将其包装为 ServiceUnavailable JSON 格式后报P0009错误，提示SDK返回的错误信息；
-步骤5：通过 SDK 获取当前 schema，检查 p_column_name 是否与已有字段重名。若存在同名字段，则报P0001错误，提示"column already exists"；
-步骤6：通过 SDK 追加列（传入列名、类型和文档注释），获取 SDK 分配的新 field ID 和新 schema 对象。新 schema ID = 当前 schema ID + 1；
-步骤7：自动构造提交所需的 requirements 和 updates。requirements 包含四项断言：assert-table-uuid（表的 UUID 匹配）、assert-ref-snapshot-id（当前快照 ID 匹配，ref 为 "main"）、assert-current-schema-id（当前 schema ID 匹配）、assert-last-assigned-field-id（最后分配的 field ID 匹配），全部取值自步骤3 获取的元信息。updates 包含两项操作：add-schema（新 schema JSON 及新的 last-column-id）和 set-current-schema（新 schema ID）；
-步骤8：通过 SDK 提交表变更（将 requirements 和 updates 转为字符串，SDK 内部应用变更并写新 metadata JSON 到 S3）。若 SDK 返回错误消息，则将其包装为 CommitFailedException JSON 格式后报P0005错误，提示SDK返回的提交失败信息；
-步骤9：更新元信息表（乐观锁：WHERE metadata_location = 旧值）。通过 META 更新表记录，更新字段包括 current_schema_id（新 schema ID）和 last_column_id（新 field ID）。snapshot 保持不变。若乐观锁条件不匹配，则报P0005错误，提示"Commit conflict: the table has been modified concurrently"；
-步骤10：通过 SDK 获取完整 metadata JSON，释放 SDK 表对象，将 metadata JSON 包装为 JSONB 格式返回。
+1. 校验入参 p_namespace、p_table、p_column_name、p_column_type 是否存在 NULL 或空字符串。若有任一不符合，则报P0001错误，提示"namespace, table, column name and column type must not be empty"；
+2. 通过 SDK 校验 p_column_type 是否为合法的 Iceberg 类型字符串。若不合法，则报P0001错误，提示SDK返回的类型校验错误信息；
+3. 通过 META 读取表元信息记录并加行锁（FOR UPDATE）。若记录不存在，则报P0004错误，提示"table not found"；
+4. 通过 SDK 加载表对象（传入步骤3 获取的 metadata_location）。若 SDK 返回错误消息，则将其包装为 ServiceUnavailable JSON 格式后报P0009错误，提示SDK返回的错误信息；
+5. 通过 SDK 获取当前 schema，检查 p_column_name 是否与已有字段重名。若存在同名字段，则报P0001错误，提示"column already exists"；
+6. 通过 SDK 追加列（传入列名、类型和文档注释），获取 SDK 分配的新 field ID 和新 schema 对象。新 schema ID = 当前 schema ID + 1；
+7. 自动构造提交所需的 requirements 和 updates。requirements 包含四项断言：assert-table-uuid（表的 UUID 匹配）、assert-ref-snapshot-id（当前快照 ID 匹配，ref 为 "main"）、assert-current-schema-id（当前 schema ID 匹配）、assert-last-assigned-field-id（最后分配的 field ID 匹配），全部取值自步骤3 获取的元信息。updates 包含两项操作：add-schema（新 schema JSON 及新的 last-column-id）和 set-current-schema（新 schema ID）；
+8. 通过 SDK 提交表变更（将 requirements 和 updates 转为字符串，SDK 内部应用变更并写新 metadata JSON 到 S3）。若 SDK 返回错误消息，则将其包装为 CommitFailedException JSON 格式后报P0005错误，提示SDK返回的提交失败信息；
+9. 更新元信息表（乐观锁：WHERE metadata_location = 旧值）。通过 META 更新表记录，更新字段包括 current_schema_id（新 schema ID）和 last_column_id（新 field ID）。snapshot 保持不变。若乐观锁条件不匹配，则报P0005错误，提示"Commit conflict: the table has been modified concurrently"；
+10. 通过 SDK 获取完整 metadata JSON，释放 SDK 表对象，将 metadata JSON 包装为 JSONB 格式返回。
 
 **流程图**：
 ```
