@@ -18,6 +18,7 @@
 #include <string.h>
 
 #include "iceberg_catalog.h"
+#include "metadata.h"
 #include "table.h"
 
 
@@ -110,23 +111,19 @@ iceberg_create_table(PG_FUNCTION_ARGS)
     /* TODO: Validate p_schema type is "struct" */
     /* TODO: For each field in p_schema.fields[], call catalog->ValidateType(field.type) */
 
-    /* 4. TODO: Check namespace exists */
+    /* 4. Check namespace exists */
 
-    /* TODO:
-     * if (!iceberg_meta_namespace_exists(p_namespace))
-     *     iceberg_error(ERRCODE_ICEBERG_NOT_FOUND,
-     *                   "NoSuchNamespaceException",
-     *                   "Namespace does not exist");
-     */
+    if (!iceberg_meta_namespace_exists(p_namespace))
+        ereport(ERROR,
+                (errcode(ERRCODE_ICEBERG_NOT_FOUND),
+                 errmsg("namespace not found")));
 
-    /* 5. TODO: Check table does not already exist */
+    /* 5. Check table does not already exist */
 
-    /* TODO:
-     * if (iceberg_meta_table_exists(p_namespace, p_table_name))
-     *     iceberg_error(ERRCODE_ICEBERG_CONFLICT,
-     *                   "AlreadyExistsException",
-     *                   "Table already exists");
-     */
+    if (iceberg_meta_table_exists(p_namespace, p_table_name))
+        ereport(ERROR,
+                (errcode(ERRCODE_ICEBERG_CONFLICT),
+                 errmsg("table already exists")));
 
     /* 6. TODO: SDK CreateTable */
 
