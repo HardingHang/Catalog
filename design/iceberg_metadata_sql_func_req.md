@@ -1,0 +1,1 @@
+此需求需要提供一组SQL自定义函数用于参照iceberg rest api语义操作iceberg元数据。
