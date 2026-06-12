@@ -35,8 +35,10 @@ iceberg_create_table(PG_FUNCTION_ARGS)
      *   3. p_schema          JSONB    (required)
      *   4. p_location        TEXT     (optional, default NULL)
      *   5. p_partition_spec  JSONB    (optional, default NULL)
-     *   6. p_write_order     JSONB    (optional, default NULL)
+     *   6. p_write_order     JSONB    (optional, default NULL, not yet implemented)
      *   7. p_stage_create    BOOLEAN  (optional, default FALSE)
+     *      TRUE  — stage the creation as a transaction, commit later via commit_table (not yet supported)
+     *      FALSE — create the table immediately
      *   8. p_properties      JSONB    (optional, default NULL)
      *
      * Returns: JSONB (LoadTableResult)
@@ -172,4 +174,95 @@ iceberg_create_table(PG_FUNCTION_ARGS)
 
     PG_RETURN_DATUM(DirectFunctionCall1(jsonb_in,
         CStringGetDatum("{\"metadata-location\": \"TODO\", \"metadata\": {}, \"config\": {}}")));
+}
+
+
+/* ---- drop_table ---- */
+
+PG_FUNCTION_INFO_V1(iceberg_drop_table);
+
+Datum
+iceberg_drop_table(PG_FUNCTION_ARGS)
+{
+    /*-------------------------------------------------------------------------
+     * Parameters:
+     *   1. p_namespace    TEXT     (required)
+     *   2. p_table        TEXT     (required)
+     *   3. p_purge        BOOLEAN  (optional, default FALSE)
+     *      TRUE  — also purge underlying data files (not yet supported)
+     *      FALSE — remove catalog registration and metadata only
+     *
+     * Returns: JSONB ({"success": true})
+     *-------------------------------------------------------------------------
+     */
+
+    /* 1. Extract parameters */
+
+    if (PG_NARGS() < 2)
+        elog(ERROR, "iceberg_drop_table: expected at least 2 arguments, got %d", PG_NARGS());
+
+    char *p_namespace = NULL;
+    if (!PG_ARGISNULL(0))
+        p_namespace = text_to_cstring(PG_GETARG_TEXT_P(0));
+
+    char *p_table = NULL;
+    if (!PG_ARGISNULL(1))
+        p_table = text_to_cstring(PG_GETARG_TEXT_P(1));
+
+    bool p_purge = false;
+    if (PG_NARGS() > 2 && !PG_ARGISNULL(2))
+        p_purge = PG_GETARG_BOOL(2);
+
+    /* 2. Validate required parameters */
+
+    if (p_namespace == NULL || strlen(p_namespace) == 0)
+        ereport(ERROR,
+                (errcode(ERRCODE_ICEBERG_INVALID_PARAM),
+                 errmsg("p_namespace is required and must not be empty")));
+
+    if (p_table == NULL || strlen(p_table) == 0)
+        ereport(ERROR,
+                (errcode(ERRCODE_ICEBERG_INVALID_PARAM),
+                 errmsg("p_table is required and must not be empty")));
+
+    /* 3. TODO: Check p_purge not yet supported */
+
+    if (p_purge)
+        ereport(ERROR,
+                (errcode(ERRCODE_ICEBERG_NOT_SUPPORTED),
+                 errmsg("p_purge is not yet supported")));
+
+    /* 4. TODO: Get table for update via META */
+
+    /* TODO:
+     * MetaTableInfo *info = iceberg_meta_lock_table(p_namespace, p_table);
+     * if (info == NULL)
+     *     ereport(ERROR,
+     *             (errcode(ERRCODE_ICEBERG_NOT_FOUND),
+     *              errmsg("The given table does not exist")));
+     */
+
+    /* 5. TODO: DDL DropStorage */
+
+    /* TODO:
+     * iceberg_ddl_DropStorage(p_namespace, p_table, info->table_uuid);
+     */
+
+    /* 6. TODO: META DeleteTable */
+
+    /* TODO:
+     * iceberg_meta_drop_table_record(p_namespace, p_table);
+     * // ON DELETE CASCADE handles related rows
+     */
+
+    /* 7. TODO: SDK cleanup (best-effort) */
+
+    /* TODO:
+     * catalog->DropTable(p_namespace, p_table);
+     */
+
+    /* 8. Return success */
+
+    PG_RETURN_DATUM(DirectFunctionCall1(jsonb_in,
+        CStringGetDatum("{\"success\": true}")));
 }

@@ -171,3 +171,10 @@ CREATE OR REPLACE FUNCTION iceberg_catalog.create_table(
 LANGUAGE C VOLATILE
 AS 'iceberg_catalog', 'iceberg_create_table';
 
+CREATE OR REPLACE FUNCTION iceberg_catalog.drop_table(
+    p_namespace TEXT,
+    p_table     TEXT,
+    p_purge     BOOLEAN DEFAULT FALSE
+) RETURNS JSONB
+LANGUAGE C VOLATILE
+AS 'iceberg_catalog', 'iceberg_drop_table';
