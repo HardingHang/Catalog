@@ -15,10 +15,48 @@
 #include "utils/builtins.h"
 #include "utils/jsonb.h"
 
+#include <stdlib.h>
 #include <string.h>
 
+#include "errors.h"
 #include "iceberg_catalog.h"
+#include "metadata.h"
 #include "table.h"
+
+
+static char *
+jsonb_to_cstring(Jsonb *value)
+{
+    return DatumGetCString(DirectFunctionCall1(jsonb_out, PointerGetDatum(value)));
+}
+
+static int
+temporary_last_column_id(const char *schema_json)
+{
+    const char *cursor = schema_json;
+    int max_id = 0;
+
+    /*
+     * Temporary bridge until SDK schema parsing is wired in.  The metadata
+     * layer still validates the full schema JSON before writing cache rows.
+     */
+    while ((cursor = strstr(cursor, "\"id\"")) != NULL) {
+        const char *colon = strchr(cursor, ':');
+        long value;
+
+        if (colon == NULL)
+            break;
+        colon++;
+        while (*colon == ' ' || *colon == '\t')
+            colon++;
+        value = strtol(colon, NULL, 10);
+        if (value > max_id)
+            max_id = (int) value;
+        cursor = colon;
+    }
+
+    return max_id;
+}
 
 
 /* ---- create_table ---- */
@@ -110,23 +148,37 @@ iceberg_create_table(PG_FUNCTION_ARGS)
     /* TODO: Validate p_schema type is "struct" */
     /* TODO: For each field in p_schema.fields[], call catalog->ValidateType(field.type) */
 
-    /* 4. TODO: Check namespace exists */
+    /* 4. Check namespace exists */
 
-    /* TODO:
-     * if (!iceberg_meta_namespace_exists(p_namespace))
-     *     iceberg_error(ERRCODE_ICEBERG_NOT_FOUND,
-     *                   "NoSuchNamespaceException",
-     *                   "Namespace does not exist");
-     */
+    PG_TRY();
+    {
+        if (!iceberg_meta_namespace_exists(p_namespace))
+            ereport(ERROR,
+                    (errcode(ERRCODE_ICEBERG_NOT_FOUND),
+                     errmsg("namespace not found")));
+    }
+    PG_CATCH();
+    {
+        ErrorData *edata = CopyErrorData();
+        iceberg_err_rethrow_metadata(edata, "create table namespace check");
+    }
+    PG_END_TRY();
 
-    /* 5. TODO: Check table does not already exist */
+    /* 5. Check table does not already exist */
 
-    /* TODO:
-     * if (iceberg_meta_table_exists(p_namespace, p_table_name))
-     *     iceberg_error(ERRCODE_ICEBERG_CONFLICT,
-     *                   "AlreadyExistsException",
-     *                   "Table already exists");
-     */
+    PG_TRY();
+    {
+        if (iceberg_meta_table_exists(p_namespace, p_table_name))
+            ereport(ERROR,
+                    (errcode(ERRCODE_ICEBERG_CONFLICT),
+                     errmsg("table already exists")));
+    }
+    PG_CATCH();
+    {
+        ErrorData *edata = CopyErrorData();
+        iceberg_err_rethrow_metadata(edata, "create table existence check");
+    }
+    PG_END_TRY();
 
     /* 6. TODO: SDK CreateTable */
 
@@ -148,11 +200,55 @@ iceberg_create_table(PG_FUNCTION_ARGS)
      * iceberg_ddl_CreateStorage(p_namespace, p_table_name, result);
      */
 
-    /* 8. TODO: META InsertTable */
+    /* 8. META InsertTable */
 
-    /* TODO:
-     * iceberg_meta_register_table(p_namespace, p_table_name, result);
-     */
+    {
+        /*
+         * TODO: Replace these temporary values with the SDK CreateTable result
+         * and the DDL CreateStorage relation OID once those modules are wired.
+         */
+        static Oid next_temporary_relid = 800000;
+        static unsigned int next_temporary_uuid = 1;
+        char *schema_json = jsonb_to_cstring(p_schema);
+        char *partition_fields_json = p_partition_spec == NULL ? NULL : jsonb_to_cstring(p_partition_spec);
+        char *metadata_location = psprintf("file:///tmp/iceberg_catalog/%s/%s/metadata/v1.metadata.json",
+                                           p_namespace, p_table_name);
+        char *table_location = p_location == NULL
+                                   ? psprintf("file:///tmp/iceberg_catalog/%s/%s", p_namespace, p_table_name)
+                                   : p_location;
+        char *table_uuid = psprintf("00000000-0000-0000-0000-%012u", next_temporary_uuid++);
+        MetaRegisterTableInput meta_input;
+
+        memset(&meta_input, 0, sizeof(meta_input));
+        meta_input.table_info.relid = next_temporary_relid++;
+        meta_input.table_info.namespace_name = p_namespace;
+        meta_input.table_info.table_name = p_table_name;
+        meta_input.table_info.table_uuid = table_uuid;
+        meta_input.table_info.metadata_location = metadata_location;
+        meta_input.table_info.previous_metadata_location = NULL;
+        meta_input.table_info.table_location = table_location;
+        meta_input.table_info.last_column_id = temporary_last_column_id(schema_json);
+        meta_input.table_info.current_schema_id = 0;
+        meta_input.table_info.has_current_schema_id = true;
+        meta_input.table_info.has_current_snapshot_id = false;
+        meta_input.table_info.default_spec_id = 0;
+        meta_input.table_info.has_default_spec_id = true;
+        meta_input.schema_json = schema_json;
+        meta_input.partition_fields_json = partition_fields_json;
+        meta_input.schema_id = 0;
+        meta_input.spec_id = 0;
+
+        PG_TRY();
+        {
+            iceberg_meta_register_table(p_namespace, p_table_name, &meta_input);
+        }
+        PG_CATCH();
+        {
+            ErrorData *edata = CopyErrorData();
+            iceberg_err_rethrow_metadata(edata, "create table metadata registration");
+        }
+        PG_END_TRY();
+    }
 
     /* 9. TODO: Construct and return JSONB response */
 
