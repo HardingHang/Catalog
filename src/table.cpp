@@ -173,3 +173,116 @@ iceberg_create_table(PG_FUNCTION_ARGS)
     PG_RETURN_DATUM(DirectFunctionCall1(jsonb_in,
         CStringGetDatum("{\"metadata-location\": \"TODO\", \"metadata\": {}, \"config\": {}}")));
 }
+
+
+/* ---- rename_table ---- */
+
+PG_FUNCTION_INFO_V1(iceberg_rename_table);
+
+Datum
+iceberg_rename_table(PG_FUNCTION_ARGS)
+{
+    /*-------------------------------------------------------------------------
+     * Parameters:
+     *   1. p_src_ns       TEXT     (required)
+     *   2. p_src_table    TEXT     (required)
+     *   3. p_dst_ns       TEXT     (required)
+     *   4. p_dst_table    TEXT     (required)
+     *
+     * Returns: JSONB ({"success": true})
+     *-------------------------------------------------------------------------
+     */
+
+    /* 1. Extract parameters */
+
+    if (PG_NARGS() < 4)
+        elog(ERROR, "iceberg_rename_table: expected 4 arguments, got %d", PG_NARGS());
+
+    char *p_src_ns = NULL;
+    if (!PG_ARGISNULL(0))
+        p_src_ns = text_to_cstring(PG_GETARG_TEXT_P(0));
+
+    char *p_src_table = NULL;
+    if (!PG_ARGISNULL(1))
+        p_src_table = text_to_cstring(PG_GETARG_TEXT_P(1));
+
+    char *p_dst_ns = NULL;
+    if (!PG_ARGISNULL(2))
+        p_dst_ns = text_to_cstring(PG_GETARG_TEXT_P(2));
+
+    char *p_dst_table = NULL;
+    if (!PG_ARGISNULL(3))
+        p_dst_table = text_to_cstring(PG_GETARG_TEXT_P(3));
+
+    /* 2. Validate required parameters */
+
+    if (p_src_ns == NULL || strlen(p_src_ns) == 0)
+        ereport(ERROR,
+                (errcode(ERRCODE_ICEBERG_INVALID_PARAM),
+                 errmsg("p_src_ns is required and must not be empty")));
+
+    if (p_src_table == NULL || strlen(p_src_table) == 0)
+        ereport(ERROR,
+                (errcode(ERRCODE_ICEBERG_INVALID_PARAM),
+                 errmsg("p_src_table is required and must not be empty")));
+
+    if (p_dst_ns == NULL || strlen(p_dst_ns) == 0)
+        ereport(ERROR,
+                (errcode(ERRCODE_ICEBERG_INVALID_PARAM),
+                 errmsg("p_dst_ns is required and must not be empty")));
+
+    if (p_dst_table == NULL || strlen(p_dst_table) == 0)
+        ereport(ERROR,
+                (errcode(ERRCODE_ICEBERG_INVALID_PARAM),
+                 errmsg("p_dst_table is required and must not be empty")));
+
+    /* 3. TODO: Check source table exists via META */
+
+    /* TODO:
+     * if (!iceberg_meta_table_exists(p_src_ns, p_src_table))
+     *     ereport(ERROR,
+     *             (errcode(ERRCODE_ICEBERG_NOT_FOUND),
+     *              errmsg("The given source table does not exist")));
+     */
+
+    /* 4. TODO: Check destination namespace exists via META */
+
+    /* TODO:
+     * if (!iceberg_meta_namespace_exists(p_dst_ns))
+     *     ereport(ERROR,
+     *             (errcode(ERRCODE_ICEBERG_NOT_FOUND),
+     *              errmsg("The given destination namespace does not exist")));
+     */
+
+    /* 5. TODO: Check destination table does not exist via META */
+
+    /* TODO:
+     * if (iceberg_meta_table_exists(p_dst_ns, p_dst_table))
+     *     ereport(ERROR,
+     *             (errcode(ERRCODE_ICEBERG_CONFLICT),
+     *              errmsg("The requested table identifier already exists")));
+     */
+
+    /* 6. TODO: META RenameTable */
+
+    /* TODO:
+     * iceberg_meta_rename_table_record(p_src_ns, p_src_table, p_dst_ns, p_dst_table);
+     */
+
+    /* 7. NOTE: SDK RenameTable is not needed.
+     *
+     * The design doc reserves catalog->RenameTable() for implementations that
+     * migrate S3 paths on rename. In standard Iceberg, rename only updates the
+     * (namespace, table_name) → metadata_location mapping — S3 metadata.json (keyed
+     * by table-uuid) and data files are untouched. Since this mapping is managed
+     * entirely by META (iceberg_meta_rename_table_record), calling SDK would
+     * duplicate the operation and introduce an atomicity gap between META and SDK.
+     *
+     * No SDK call required. META is the single source of truth for rename.
+     */
+
+    /* 8. Return success */
+
+    PG_RETURN_DATUM(DirectFunctionCall1(jsonb_in,
+        CStringGetDatum("{\"success\": true}")));
+}
