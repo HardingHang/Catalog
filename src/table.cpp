@@ -173,3 +173,74 @@ iceberg_create_table(PG_FUNCTION_ARGS)
     PG_RETURN_DATUM(DirectFunctionCall1(jsonb_in,
         CStringGetDatum("{\"metadata-location\": \"TODO\", \"metadata\": {}, \"config\": {}}")));
 }
+
+
+/* ---- list_tables ---- */
+
+PG_FUNCTION_INFO_V1(iceberg_list_tables);
+
+Datum
+iceberg_list_tables(PG_FUNCTION_ARGS)
+{
+    /*-------------------------------------------------------------------------
+     * Parameters:
+     *   1. p_namespace    TEXT     (required)
+     *   2. p_page_size    INTEGER  (optional, default 1000)
+     *   3. p_page_token   TEXT     (optional, default NULL)
+     *
+     * Returns: JSONB (ListTablesResponse)
+     *-------------------------------------------------------------------------
+     */
+
+    /* 1. Extract parameters */
+
+    if (PG_NARGS() < 1)
+        elog(ERROR, "iceberg_list_tables: expected at least 1 argument, got %d", PG_NARGS());
+
+    char *p_namespace = NULL;
+    if (!PG_ARGISNULL(0))
+        p_namespace = text_to_cstring(PG_GETARG_TEXT_P(0));
+
+    int p_page_size = 1000;
+    if (PG_NARGS() > 1 && !PG_ARGISNULL(1))
+        p_page_size = PG_GETARG_INT32(1);
+
+    char *p_page_token = NULL;
+    if (PG_NARGS() > 2 && !PG_ARGISNULL(2))
+        p_page_token = text_to_cstring(PG_GETARG_TEXT_P(2));
+
+    /* 2. Validate parameters */
+
+    if (p_namespace == NULL || strlen(p_namespace) == 0)
+        ereport(ERROR,
+                (errcode(ERRCODE_ICEBERG_INVALID_PARAM),
+                 errmsg("p_namespace is required and must not be empty")));
+
+    if (p_page_size < 1)
+        ereport(ERROR,
+                (errcode(ERRCODE_ICEBERG_INVALID_PARAM),
+                 errmsg("p_page_size must be >= 1")));
+
+    /* 3. TODO: Check namespace exists via META */
+
+    /* TODO:
+     * if (!iceberg_meta_namespace_exists(p_namespace))
+     *     ereport(ERROR,
+     *             (errcode(ERRCODE_ICEBERG_NOT_FOUND),
+     *              errmsg("The given namespace does not exist")));
+     */
+
+    /* 4. TODO: List tables via META */
+
+    /* TODO:
+     * char *result = iceberg_meta_list_tables(p_namespace, p_page_size, p_page_token);
+     * PG_RETURN_DATUM(DirectFunctionCall1(jsonb_in,
+     *     CStringGetDatum(result)));
+     * pfree(result);
+     */
+
+    /* 5. Return stub (TODO: replace with real META call) */
+
+    PG_RETURN_DATUM(DirectFunctionCall1(jsonb_in,
+        CStringGetDatum("{\"identifiers\": [], \"next-page-token\": null}")));
+}

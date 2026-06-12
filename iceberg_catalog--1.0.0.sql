@@ -171,3 +171,10 @@ CREATE OR REPLACE FUNCTION iceberg_catalog.create_table(
 LANGUAGE C VOLATILE
 AS 'iceberg_catalog', 'iceberg_create_table';
 
+CREATE OR REPLACE FUNCTION iceberg_catalog.list_tables(
+    p_namespace  TEXT,
+    p_page_size  INTEGER DEFAULT 1000,
+    p_page_token TEXT    DEFAULT NULL
+) RETURNS JSONB
+LANGUAGE C STABLE
+AS 'iceberg_catalog', 'iceberg_list_tables';
