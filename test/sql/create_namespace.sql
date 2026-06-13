@@ -55,39 +55,47 @@ SAVEPOINT sp9;
 SELECT iceberg_catalog.create_namespace(NULL::TEXT, '{}'::JSONB);
 ROLLBACK TO SAVEPOINT sp9;
 
+-- 10. p_properties 为 JSONB string（非 object） → 报错 (P0001)
+SAVEPOINT sp10;
+SELECT iceberg_catalog.create_namespace('ns', '"not_an_object"'::JSONB);
+ROLLBACK TO SAVEPOINT sp10;
+
+-- 11. p_properties 为 JSONB array（非 object） → 报错 (P0001)
+SAVEPOINT sp11;
+SELECT iceberg_catalog.create_namespace('ns', '["array"]'::JSONB);
+ROLLBACK TO SAVEPOINT sp11;
+
+-- 12. p_properties 为 JSONB number（非 object） → 报错 (P0001)
+SAVEPOINT sp12;
+SELECT iceberg_catalog.create_namespace('ns', '42'::JSONB);
+ROLLBACK TO SAVEPOINT sp12;
+
 -- ============================================================================
 -- 第三部分：未实现的功能 — 报错场景 (Stub 阶段不触发，但预留)
 -- ============================================================================
 
--- 10. TODO: 重复创建同一 namespace → 报错 (P0005)
--- SAVEPOINT sp10;
+-- 13. TODO: 重复创建同一 namespace → 报错 (P0005)
+-- SAVEPOINT sp13;
 -- SELECT iceberg_catalog.create_namespace('dup_ns');
 -- SELECT iceberg_catalog.create_namespace('dup_ns');  -- 第二次应报 P0005
--- ROLLBACK TO SAVEPOINT sp10;
-
--- 11. TODO: p_properties 非 JSONB object → 报错 (P0001)
--- SAVEPOINT sp11;
--- SELECT iceberg_catalog.create_namespace('ns', '"not_an_object"'::JSONB);
--- SELECT iceberg_catalog.create_namespace('ns', '["array"]'::JSONB);
--- SELECT iceberg_catalog.create_namespace('ns', '42'::JSONB);
--- ROLLBACK TO SAVEPOINT sp11;
+-- ROLLBACK TO SAVEPOINT sp13;
 
 -- ============================================================================
 -- 第四部分：边界场景
 -- ============================================================================
 
--- 12. 命名空间名称为特殊字符（合法标识符）
+-- 14. 命名空间名称为特殊字符（合法标识符）
 SELECT iceberg_catalog.create_namespace('ns-with-dash');
 SELECT iceberg_catalog.create_namespace('ns_with_underscore');
 SELECT iceberg_catalog.create_namespace('NS123MixedCase');
 
--- 13. properties 中包含多层嵌套对象
+-- 15. properties 中包含多层嵌套对象
 SELECT iceberg_catalog.create_namespace(
     'nested_ns',
     '{"env":"prod","config":{"replicas":3,"tags":{"team":"platform","cost":"low"}}}'::JSONB
 );
 
--- 14. properties 中包含数组
+-- 16. properties 中包含数组
 SELECT iceberg_catalog.create_namespace(
     'arr_ns',
     '{"owners":["alice","bob"],"regions":["us","eu"]}'::JSONB

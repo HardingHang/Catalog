@@ -62,12 +62,18 @@ iceberg_create_namespace(PG_FUNCTION_ARGS)
 
     /* 3. Validate p_properties (if provided, must be a JSONB object) */
 
-    /* TODO:
-     * if (p_properties != NULL && !jsonb_is_object(p_properties))
-     *     ereport(ERROR,
-     *             (errcode(ERRCODE_ICEBERG_INVALID_PARAM),
-     *              errmsg("p_properties must be a JSONB object")));
-     */
+    if (p_properties != NULL)
+    {
+        Datum  type_datum = DirectFunctionCall1(jsonb_typeof,
+                                JsonbGetDatum(p_properties));
+        char  *type_str   = text_to_cstring(DatumGetTextP(type_datum));
+
+        if (strcmp(type_str, "object") != 0)
+            ereport(ERROR,
+                    (errcode(ERRCODE_ICEBERG_INVALID_PARAM),
+                     errmsg("p_properties must be a JSONB object")));
+        pfree(type_str);
+    }
 
     /* 4. TODO: META Check namespace not already exists
      *
