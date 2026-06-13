@@ -79,34 +79,30 @@ SAVEPOINT sp8;
 SELECT iceberg_catalog.update_namespace_properties('ns');
 ROLLBACK TO SAVEPOINT sp8;
 
--- ============================================================================
--- 第四部分：未实现的功能 — 报错场景 (Stub 阶段不触发，但预留)
--- ============================================================================
+-- 9. p_removals 不是 JSONB 数组 → 报错 (P0001)
+SAVEPOINT sp9;
+SELECT iceberg_catalog.update_namespace_properties(
+    'ns',
+    p_removals => '"not_an_array"'::JSONB
+);
+ROLLBACK TO SAVEPOINT sp9;
 
--- 9. TODO: p_removals 不是 JSONB 数组 → 报错 (P0001)
--- SAVEPOINT sp9;
--- SELECT iceberg_catalog.update_namespace_properties(
---     'ns',
---     p_removals => '"not_an_array"'::JSONB
--- );
--- ROLLBACK TO SAVEPOINT sp9;
+-- 10. p_updates 不是 JSONB object → 报错 (P0001)
+SAVEPOINT sp10;
+SELECT iceberg_catalog.update_namespace_properties(
+    'ns',
+    p_updates => '"not_an_object"'::JSONB
+);
+ROLLBACK TO SAVEPOINT sp10;
 
--- 10. TODO: p_updates 不是 JSONB object → 报错 (P0001)
--- SAVEPOINT sp10;
--- SELECT iceberg_catalog.update_namespace_properties(
---     'ns',
---     p_updates => '"not_an_object"'::JSONB
--- );
--- ROLLBACK TO SAVEPOINT sp10;
-
--- 11. TODO: removals ∩ updates ≠ ∅ → 报错 (P0006)
--- SAVEPOINT sp11;
--- SELECT iceberg_catalog.update_namespace_properties(
---     'ns',
---     p_removals => '["same_key"]'::JSONB,
---     p_updates  => '{"same_key": "val"}'::JSONB
--- );
--- ROLLBACK TO SAVEPOINT sp11;
+-- 11. removals ∩ updates ≠ ∅ → 报错 (P0006)
+SAVEPOINT sp11;
+SELECT iceberg_catalog.update_namespace_properties(
+    'ns',
+    p_removals => '["same_key"]'::JSONB,
+    p_updates  => '{"same_key": "val"}'::JSONB
+);
+ROLLBACK TO SAVEPOINT sp11;
 
 -- ============================================================================
 -- 第五部分：边界场景

@@ -80,17 +80,33 @@ iceberg_update_namespace_properties(PG_FUNCTION_ARGS)
 
     /* 4. Validate: p_removals (if non-NULL) must be a JSONB array */
 
-    if (p_removals != NULL && !JB_ROOT_IS_ARRAY(p_removals))
-        ereport(ERROR,
-                (errcode(ERRCODE_ICEBERG_INVALID_PARAM),
-                 errmsg("p_removals must be a JSONB array")));
+    if (p_removals != NULL)
+    {
+        Datum  type_datum = DirectFunctionCall1(jsonb_typeof,
+                                JsonbGetDatum(p_removals));
+        char  *type_str   = text_to_cstring(DatumGetTextP(type_datum));
+
+        if (strcmp(type_str, "array") != 0)
+            ereport(ERROR,
+                    (errcode(ERRCODE_ICEBERG_INVALID_PARAM),
+                     errmsg("p_removals must be a JSONB array")));
+        pfree(type_str);
+    }
 
     /* 5. Validate: p_updates (if non-NULL) must be a JSONB object */
 
-    if (p_updates != NULL && !JB_ROOT_IS_OBJECT(p_updates))
-        ereport(ERROR,
-                (errcode(ERRCODE_ICEBERG_INVALID_PARAM),
-                 errmsg("p_updates must be a JSONB object")));
+    if (p_updates != NULL)
+    {
+        Datum  type_datum = DirectFunctionCall1(jsonb_typeof,
+                                JsonbGetDatum(p_updates));
+        char  *type_str   = text_to_cstring(DatumGetTextP(type_datum));
+
+        if (strcmp(type_str, "object") != 0)
+            ereport(ERROR,
+                    (errcode(ERRCODE_ICEBERG_INVALID_PARAM),
+                     errmsg("p_updates must be a JSONB object")));
+        pfree(type_str);
+    }
 
     /* 6. Validate removals ∩ updates = ∅ */
 
