@@ -158,6 +158,12 @@ COMMENT ON VIEW iceberg_catalog.iceberg_namespace_properties IS
 -- SQL Functions
 -- ============================================================================
 
+CREATE OR REPLACE FUNCTION iceberg_catalog.load_namespace(
+    p_namespace TEXT
+) RETURNS JSONB
+LANGUAGE C STABLE
+AS 'iceberg_catalog', 'iceberg_load_namespace';
+
 CREATE OR REPLACE FUNCTION iceberg_catalog.create_table(
     p_namespace    TEXT,
     p_table_name   TEXT,
