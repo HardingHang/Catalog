@@ -10,5 +10,6 @@
 #include "fmgr.h"
 
 #include "iceberg_catalog.h"
+#include "namespace.h"
 
 PG_MODULE_MAGIC;
