@@ -158,6 +158,12 @@ COMMENT ON VIEW iceberg_catalog.iceberg_namespace_properties IS
 -- SQL Functions
 -- ============================================================================
 
+CREATE OR REPLACE FUNCTION iceberg_catalog.is_namespace_existed(
+    p_namespace TEXT
+) RETURNS JSONB
+LANGUAGE C STABLE
+AS 'iceberg_catalog', 'iceberg_is_namespace_existed';
+
 CREATE OR REPLACE FUNCTION iceberg_catalog.create_table(
     p_namespace    TEXT,
     p_table_name   TEXT,
